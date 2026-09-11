@@ -84,10 +84,7 @@ class HttpSmsController extends BaseController
 
         $fcmToken = trim((string)($raw['fcm_token'] ?? ''));
         $phoneNumber = trim((string)($raw['phone_number'] ?? ''));
-        $sim = strtoupper(trim((string)($raw['sim'] ?? 'SIM1')));
-        if ($sim !== 'SIM2') {
-            $sim = 'SIM1';
-        }
+        $sim = 'SIM1'; // Strict Single SIM Mode
 
         if (empty($fcmToken) || empty($phoneNumber)) {
             return $this->response->setStatusCode(422)->setJSON([
@@ -100,15 +97,15 @@ class HttpSmsController extends BaseController
         $userId = 'usr_' . substr(md5(env('app.smsApiKey', 'sms_key')), 0, 12);
         $line = $this->phoneLineModel->registerLine($phoneNumber, $sim, $fcmToken, $userId);
 
-        // Also update / register gateway device in sms_gateways
-        $deviceId = 'dev_' . preg_replace('/[^a-zA-Z0-9]/', '', $phoneNumber) . '_' . strtolower($sim);
+        // Also update / register gateway device in sms_gateways (Single SIM)
+        $deviceId = 'dev_' . preg_replace('/[^a-zA-Z0-9]/', '', $phoneNumber);
         $existingGw = $this->gatewayModel->findByDeviceId($deviceId);
         $gwData = [
             'device_id'     => $deviceId,
-            'device_name'   => "Android Gateway ({$sim} - {$phoneNumber})",
+            'device_name'   => "Android Gateway ({$phoneNumber})",
             'status'        => 'ONLINE',
             'phone_number'  => $phoneNumber,
-            'sim_slot'      => $sim === 'SIM2' ? 2 : 1,
+            'sim_slot'      => 1,
             'last_seen_at'  => date('Y-m-d H:i:s'),
         ];
         if ($existingGw) {

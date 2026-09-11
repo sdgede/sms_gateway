@@ -52,9 +52,10 @@ Terdapat 2 jenis pengguna API:
 
 ---
 
-## 3. Alur Pairing HP Android (All-In-One: Registrasi Device, FCM, SIM & Nomor HP)
+## 3. Alur Pairing HP Android (Mode Single SIM: 1 Provider & 1 Nomor HP)
 
-Endpoint pairing ini adalah **titik registrasi lengkap (All-In-One)**. Saat HP Android mengirimkan Pairing Code (atau hasil scan QR Code), backend **sekaligus mendaftarkan Device ID, FCM Push Token, Nomor HP, dan Slot SIM** ke sistem dalam 1 kali request!
+> [!IMPORTANT]
+> **Kebijakan Single SIM:** Sistem SMS Gateway ini beroperasi dalam mode **Single SIM**. Setiap perangkat HP Android hanya boleh mendaftarkan **1 nomor HP dan 1 provider operator seluler** (`SIM1`).
 
 ### **`POST /api/v1/gateway/pair`**
 Dipanggil saat HP Android melakukan scan QR Code atau memasukkan 6 karakter pairing code dari dashboard.
@@ -65,13 +66,13 @@ Dipanggil saat HP Android melakukan scan QR Code atau memasukkan 6 karakter pair
   ```
   *(Catatan: Tidak butuh Authorization / x-api-key).*
 
-- **Request Body (Single SIM):**
+- **Request Body:**
   ```json
   {
     "pairing_code": "A8C2E1",
     "fcm_token": "fcm_token_panjang_dari_firebase...",
     "phone_number": "+6281234567890",
-    "sim_slot": 1,
+    "sim": "SIM1",
     "sim_operator": "Telkomsel",
     "device_name": "Xiaomi Redmi Note 10 Gateway",
     "device_model": "Redmi Note 10",
@@ -79,48 +80,21 @@ Dipanggil saat HP Android melakukan scan QR Code atau memasukkan 6 karakter pair
   }
   ```
 
-- **Request Body (Dual SIM / Multi SIM):**
-  ```json
-  {
-    "pairing_code": "A8C2E1",
-    "device_name": "Xiaomi Redmi Note 10 Gateway",
-    "device_model": "Redmi Note 10",
-    "app_version": "1.0.0",
-    "sim_lines": [
-      {
-        "phone_number": "+6281234567890",
-        "sim": "SIM1",
-        "fcm_token": "fcm_token_sim1..."
-      },
-      {
-        "phone_number": "+6287712345678",
-        "sim": "SIM2",
-        "fcm_token": "fcm_token_sim2..."
-      }
-    ]
-  }
-  ```
-
 - **Response Sukses (200 OK):**
   ```json
   {
     "status": "success",
-    "message": "Device and SIM lines successfully paired to SMS Gateway.",
+    "message": "Device successfully paired to SMS Gateway (Single SIM Mode).",
     "data": {
       "device_id": "redmi_note_10-a1b2c3",
       "device_name": "Xiaomi Redmi Note 10 Gateway",
       "token": "gw_token_3f9c8d2a1b7e405f6a8b9c0d1e2f3a4b",
       "device_token": "gw_token_3f9c8d2a1b7e405f6a8b9c0d1e2f3a4b",
       "phone_number": "+6281234567890",
-      "sim_slot": 1,
+      "sim": "SIM1",
+      "sim_operator": "Telkomsel",
       "fcm_registered": true,
-      "registered_lines": [
-        {
-          "sim": "SIM1",
-          "phone_number": "+6281234567890"
-        }
-      ],
-      "server_time": "2026-09-11 08:49:00"
+      "server_time": "2026-09-11 08:58:00"
     }
   }
   ```
