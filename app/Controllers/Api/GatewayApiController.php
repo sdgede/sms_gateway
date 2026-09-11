@@ -36,29 +36,57 @@ class GatewayApiController extends BaseController
     }
 
     /**
+     * Helper to extract request data flexibly from JSON, Raw Body, or POST
+     */
+    private function extractRequestData(): array
+    {
+        $data = $this->request->getJSON(true);
+        if (empty($data) || !is_array($data)) {
+            $raw = (string)$this->request->getBody();
+            if (!empty($raw)) {
+                $decoded = json_decode($raw, true);
+                if (is_array($decoded)) {
+                    $data = $decoded;
+                }
+            }
+        }
+        if (empty($data) || !is_array($data)) {
+            $data = $this->request->getPost() ?? [];
+        }
+        return $data;
+    }
+
+    /**
      * One-Time Device Pairing
      * POST /gateway/pair
      */
     public function pair(): ResponseInterface
     {
-        $json = $this->request->getJSON(true) ?? $this->request->getPost();
+        $raw = $this->extractRequestData();
+
+        // Support both snake_case and camelCase field names from Mobile
+        $json = [
+            'pairing_code' => trim((string)($raw['pairing_code'] ?? $raw['code'] ?? $raw['pairingCode'] ?? '')),
+            'device_id'    => trim((string)($raw['device_id'] ?? $raw['deviceId'] ?? $raw['id'] ?? '')),
+            'device_name'  => $raw['device_name'] ?? $raw['deviceName'] ?? $raw['name'] ?? null,
+            'sim_operator' => $raw['sim_operator'] ?? $raw['simOperator'] ?? $raw['operator'] ?? null,
+            'sim_slot'     => isset($raw['sim_slot']) || isset($raw['simSlot']) ? (int)($raw['sim_slot'] ?? $raw['simSlot']) : 1,
+            'phone_number' => $raw['phone_number'] ?? $raw['phoneNumber'] ?? $raw['phone'] ?? null,
+            'app_version'  => $raw['app_version'] ?? $raw['appVersion'] ?? $raw['version'] ?? null,
+        ];
 
         $rules = [
-            'pairing_code'  => 'required|min_length[4]|max_length[32]',
-            'device_id'     => 'required|min_length[3]|max_length[100]',
-            'device_name'   => 'permit_empty|max_length[150]',
-            'sim_operator'  => 'permit_empty|max_length[100]',
-            'sim_slot'      => 'permit_empty|integer',
-            'phone_number'  => 'permit_empty|max_length[30]',
-            'app_version'   => 'permit_empty|max_length[30]',
+            'pairing_code' => 'required|min_length[3]|max_length[32]',
+            'device_id'    => 'required|min_length[2]|max_length[100]',
         ];
 
         if (!$this->validateData($json, $rules)) {
             return $this->response->setStatusCode(422)->setJSON([
                 'status'  => 'error',
                 'code'    => 'VALIDATION_FAILED',
-                'message' => 'Invalid pairing request data.',
+                'message' => 'Missing pairing_code or device_id in request body.',
                 'errors'  => $this->validator->getErrors(),
+                'received_payload' => $raw,
             ]);
         }
 
@@ -134,7 +162,7 @@ class GatewayApiController extends BaseController
     public function heartbeat(): ResponseInterface
     {
         $gateway = $this->getAuthenticatedGateway();
-        $json = $this->request->getJSON(true) ?? $this->request->getPost();
+        $json = $this->extractRequestData();
 
         $this->gatewayModel->recordHeartbeat($gateway['device_id'], $json ?? []);
 
@@ -275,7 +303,15 @@ class GatewayApiController extends BaseController
     public function reportStatus(string $jobId): ResponseInterface
     {
         $gateway = $this->getAuthenticatedGateway();
-        $json = $this->request->getJSON(true) ?? $this->request->getPost();
+        $raw = $this->extractRequestData();
+
+        $json = [
+            'status'                  => strtoupper(trim((string)($raw['status'] ?? ''))),
+            'operator_status_code'    => $raw['operator_status_code'] ?? $raw['operatorStatusCode'] ?? $raw['code'] ?? null,
+            'operator_status_message' => $raw['operator_status_message'] ?? $raw['operatorStatusMessage'] ?? $raw['message'] ?? null,
+            'is_recoverable'          => $raw['is_recoverable'] ?? $raw['isRecoverable'] ?? true,
+            'raw_payload'             => $raw['raw_payload'] ?? $raw['rawPayload'] ?? null,
+        ];
 
         $rules = [
             'status'                  => 'required|in_list[SENT,DELIVERED,FAILED]',
