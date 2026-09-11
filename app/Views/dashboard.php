@@ -8,6 +8,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- QRCode JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         :root {
             --bg-base: #0b0f19;
@@ -586,8 +588,22 @@
                 <div id="pairingDisplay" class="pairing-display">
                     <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Kode Pairing Android Terbaru</div>
                     <div id="pairingCodeResult" class="pairing-code-text">------</div>
+
+                    <!-- QR Code Preview Card -->
+                    <div style="display: flex; flex-direction: column; align-items: center; margin: 12px 0;">
+                        <div style="background: white; padding: 10px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: inline-block;">
+                            <div id="pairingQrcode"></div>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+                            📷 Scan QR Code ini dari Aplikasi Android
+                        </div>
+                    </div>
+
                     <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px;" id="pairingExpiryNote">Aktif permanen sampai di-pairing</div>
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="copyActivePairingCode()">📋 Salin Kode</button>
+                    <div style="display: flex; justify-content: center; gap: 8px;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="copyActivePairingCode()">📋 Salin Kode</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="showQrModal(latestPairingCode, document.getElementById('deviceNameInput').value)">🔍 Perbesar QR</button>
+                    </div>
                 </div>
 
                 <!-- Active Unused Pairing Codes List -->
@@ -922,6 +938,7 @@
                         <span style="font-size: 11px; color: var(--text-dim); margin-left: 6px;">(${escapeHtml(c.device_name)})</span>
                     </div>
                     <div style="display: flex; gap: 4px;">
+                        <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 11px;" onclick="showQrModal('${c.code}', '${escapeHtml(c.device_name)}')" title="Lihat QR Code">📷</button>
                         <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 11px;" onclick="copyCodeText('${c.code}')" title="Salin Kode">📋</button>
                         <button class="btn btn-danger-subtle btn-sm" style="padding: 2px 8px; font-size: 11px;" onclick="handleDeletePairing(${c.id})" title="Hapus Kode">🗑️</button>
                     </div>
@@ -1189,6 +1206,7 @@
             if (result.status === 'success') {
                 latestPairingCode = result.data.code;
                 document.getElementById('pairingCodeResult').innerText = result.data.code;
+                renderQrCode('pairingQrcode', result.data.code, 150);
                 document.getElementById('pairingDisplay').style.display = 'block';
                 showToast(`Kode Pairing ${result.data.code} berhasil dibuat!`, 'success');
                 fetchLiveData();
@@ -1198,6 +1216,45 @@
         } catch (err) {
             showToast(err.message, 'error');
         }
+    }
+
+    // QR Code Generator Function
+    function renderQrCode(elementId, text, size = 150) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        el.innerHTML = '';
+        if (typeof QRCode !== 'undefined') {
+            try {
+                new QRCode(el, {
+                    text: text,
+                    width: size,
+                    height: size,
+                    colorDark: '#0b0f19',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+                return;
+            } catch (e) {
+                console.warn('QRCode lib error, using image fallback:', e);
+            }
+        }
+        // Image Fallback
+        el.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}" width="${size}" height="${size}" alt="QR Code" style="display:block; border-radius: 8px;" />`;
+    }
+
+    // Show QR Code Modal
+    function showQrModal(code, deviceName = 'Android Gateway Device') {
+        if (!code) return;
+        latestPairingCode = code;
+        document.getElementById('modalCodeText').innerText = code;
+        document.getElementById('modalDeviceName').innerText = deviceName || 'Android Gateway Device';
+        renderQrCode('modalQrcode', code, 200);
+        document.getElementById('qrModal').style.display = 'flex';
+    }
+
+    // Close QR Code Modal
+    function closeQrModal() {
+        document.getElementById('qrModal').style.display = 'none';
     }
 
     // Copy Code Text
@@ -1422,6 +1479,28 @@
             .replace(/'/g, '&#039;');
     }
 </script>
+
+<!-- QR Code Modal -->
+<div id="qrModal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(8px); z-index: 99999; align-items: center; justify-content: center; padding: 20px;" onclick="if(event.target === this) closeQrModal()">
+    <div style="background: #121826; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 28px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.7); position: relative; animation: slideIn 0.25s ease;">
+        <div style="font-size: 16px; font-weight: 700; margin-bottom: 4px;">📱 Scan Pairing QR Code</div>
+        <div id="modalDeviceName" style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Android Gateway Device</div>
+        
+        <div style="background: white; padding: 16px; border-radius: 16px; display: inline-block; margin-bottom: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+            <div id="modalQrcode"></div>
+        </div>
+
+        <div style="font-family: var(--font-mono); font-size: 28px; font-weight: 800; letter-spacing: 0.2em; color: #818cf8; margin-bottom: 8px;" id="modalCodeText">------</div>
+        <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 20px;">
+            Arahkan scanner kamera/aplikasi Android Gateway ke QR Code ini untuk verifikasi pairing instan.
+        </p>
+
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button class="btn btn-secondary btn-sm" onclick="copyActivePairingCode()">📋 Salin Kode</button>
+            <button class="btn btn-primary btn-sm" onclick="closeQrModal()">Tutup</button>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>
