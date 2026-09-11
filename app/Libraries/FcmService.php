@@ -30,8 +30,23 @@ class FcmService
     private static function sendDataNotification(string $fcmToken, array $dataPayload): bool
     {
         // 1. Try Firebase HTTP v1 (service-account.json)
-        $credentialsFile = env('fcm.credentialsFile', WRITEPATH . 'firebase/service-account.json');
-        if (file_exists($credentialsFile)) {
+        $envFile = env('fcm.credentialsFile');
+        $possiblePaths = [
+            $envFile,
+            !empty($envFile) ? ROOTPATH . ltrim($envFile, '/') : null,
+            WRITEPATH . 'firebase/service-account.json',
+            ROOTPATH . 'writable/firebase/service-account.json',
+        ];
+
+        $credentialsFile = null;
+        foreach ($possiblePaths as $p) {
+            if (!empty($p) && file_exists($p)) {
+                $credentialsFile = $p;
+                break;
+            }
+        }
+
+        if ($credentialsFile) {
             return self::sendHttpV1($credentialsFile, $fcmToken, $dataPayload);
         }
 
