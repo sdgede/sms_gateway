@@ -628,6 +628,7 @@
 <div id="toastContainer"></div>
 
 <script>
+    const BASE_URL = '<?= rtrim(base_url(), "/") ?>';
     let activePairingCode = '';
 
     // Initialize
@@ -663,7 +664,7 @@
     // Fetch Live Data
     async function fetchLiveData() {
         try {
-            const res = await fetch('/web/data');
+            const res = await fetch(`${BASE_URL}/web/data`);
             const result = await res.json();
             if (result.status === 'success') {
                 renderDashboard(result.data);
@@ -801,7 +802,7 @@
         formData.append('expiry_minutes', expiryMinutes);
 
         try {
-            const res = await fetch('/web/pairing/generate', {
+            const res = await fetch(`${BASE_URL}/web/pairing/generate`, {
                 method: 'POST',
                 body: formData
             });
@@ -841,7 +842,7 @@
         formData.append('client_message_id', clientMsgId);
 
         try {
-            const res = await fetch('/web/sms/send', {
+            const res = await fetch(`${BASE_URL}/web/sms/send`, {
                 method: 'POST',
                 body: formData
             });
@@ -869,7 +870,7 @@
         formData.append('action', action);
 
         try {
-            const res = await fetch('/web/gateway/action', {
+            const res = await fetch(`${BASE_URL}/web/gateway/action`, {
                 method: 'POST',
                 body: formData
             });
@@ -888,7 +889,7 @@
     // Run Background Worker
     async function runWorker() {
         try {
-            const res = await fetch('/web/worker/run', { method: 'POST' });
+            const res = await fetch(`${BASE_URL}/web/worker/run`, { method: 'POST' });
             const result = await res.json();
             showToast(result.message, 'success');
             fetchLiveData();
