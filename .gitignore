@@ -37,11 +37,15 @@ $RECYCLE.BIN/
 .Trash-*
 
 #-------------------------
-# Environment Files
+# Environment & Database Files
 #-------------------------
 # These should never be under version control,
 # as it poses a security risk.
 .env
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
 .vagrant
 Vagrantfile
 
