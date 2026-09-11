@@ -7,24 +7,19 @@ Dokumen ini berisi spesifikasi teknis REST API, endpoint, payload request/respon
 ## 1. Arsitektur & Alur Kerja Android Gateway
 
 ```
-[UI/Settings] -> Input Pairing Code -> POST /gateway/pair -> Simpan device_token
-                                                                    │
-┌─────────────────────────── Loop Background Service ───────────────┘
+[1. UI/Settings] -> Input Pairing Code -> POST /gateway/pair -> Dapatkan device_token
+                                                                        │
+┌─────────────────────────── Real-Time Stream Mode ─────────────────────┘
 │
-├─► [Setiap 30–60s] -> POST /gateway/heartbeat (Baterai, Sinyal, SIM, Status)
+├─► [Buka 1x Koneksi] -> GET /gateway/jobs/stream (HTTPS Port 443)
+│                        │
+│                        ├─► Server Instant Push event "new_sms_job" saat ada SMS masuk
+│                        │
+│                        ├─► Step 1: POST /gateway/jobs/{id}/claim (Kunci Job)
+│                        ├─► Step 2: POST /gateway/jobs/{id}/start (Kirim via SmsManager)
+│                        └─► Step 3: POST /gateway/jobs/{id}/report (Lapor SUKSES/GAGAL)
 │
-└─► [Setiap 3–5s]   -> GET  /gateway/jobs/next (Polling antrean PENDING)
-                             │
-                             ├─ Jika ada job:
-                             │  1. POST /gateway/jobs/{job_id}/claim
-                             │  2. POST /gateway/jobs/{job_id}/start
-                             │  3. Panggil Native Android SmsManager
-                             │
-                             ├─ Saat Callback Sent Intent (BroadcastReceiver):
-                             │  -> POST /gateway/jobs/{job_id}/report {"status": "SENT"}
-                             │
-                             └─ Saat Callback Delivery Intent (BroadcastReceiver):
-                                -> POST /gateway/jobs/{job_id}/report {"status": "DELIVERED"}
+└─► [Setiap 30–60s]   -> POST /gateway/heartbeat (Update baterai & sinyal)
 ```
 
 ---
