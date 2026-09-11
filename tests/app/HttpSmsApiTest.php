@@ -140,5 +140,25 @@ final class HttpSmsApiTest extends CIUnitTestCase
         $receiveResult->assertStatus(200);
         $recJson = json_decode($receiveResult->getJSON(), true);
         $this->assertEquals('success', $recJson['status']);
+
+        // 9. Test Mobile Heartbeat to api/v1/heartbeats without X-API-Key (Android Client)
+        $mobileHb = $this->withHeaders(['X-Client-Version' => '1.0.0'])
+            ->withBody(json_encode([
+                'device_id'                     => '700d6d4f-7725-4f2c-b0a9-bbe41ec4b4b1',
+                'app_version'                   => '1.0.0',
+                'timestamp'                     => 1789117867,
+                'sms_permission'                => true,
+                'battery_optimization_disabled' => true,
+                'battery_level'                 => 100,
+                'is_charging'                   => true,
+                'active_subscription_id'        => 1,
+                'sim_carrier'                   => 'TELKOMSEL',
+                'network_type'                  => 'CELLULAR',
+                'phone_numbers'                 => ['+6282147836034'],
+            ]))
+            ->post('api/v1/heartbeats');
+        $mobileHb->assertStatus(200);
+        $mobileHbJson = json_decode($mobileHb->getJSON(), true);
+        $this->assertEquals('success', $mobileHbJson['status']);
     }
 }
