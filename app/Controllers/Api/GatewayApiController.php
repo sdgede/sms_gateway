@@ -161,40 +161,64 @@ class GatewayApiController extends BaseController
             $this->gatewayModel->insert($gatewayData);
         }
 
-        // Also register in Phone Lines if phone number and fcm token exist
-        if (!empty($fcmToken)) {
-            $phoneLineModel = new \App\Models\SmsPhoneLineModel();
+        // 7. Register in Phone Lines (Single SIM or Multiple SIMs in array)
+        $phoneLineModel = new \App\Models\SmsPhoneLineModel();
+        $registeredLines = [];
+
+        // Check if multiple sim_lines provided
+        $simLines = $raw['sim_lines'] ?? $raw['sims'] ?? null;
+        if (is_array($simLines) && !empty($simLines)) {
+            foreach ($simLines as $idx => $line) {
+                $linePhone = $line['phone_number'] ?? $line['phoneNumber'] ?? $phoneNumber ?? $deviceId;
+                $lineSim = !empty($line['sim']) ? strtoupper($line['sim']) : 'SIM' . ($idx + 1);
+                $lineFcm = trim((string)($line['fcm_token'] ?? $line['fcmToken'] ?? $fcmToken));
+                if (!empty($lineFcm)) {
+                    $phoneLineModel->registerLine($linePhone, $lineSim, $lineFcm);
+                    $registeredLines[] = ['sim' => $lineSim, 'phone_number' => $linePhone];
+                }
+            }
+        } elseif (!empty($fcmToken)) {
+            // Single SIM registration
             $simLabel = $simSlot === 2 ? 'SIM2' : 'SIM1';
             $phoneLineModel->registerLine($phoneNumber ?: $deviceId, $simLabel, $fcmToken);
+            $registeredLines[] = ['sim' => $simLabel, 'phone_number' => $phoneNumber ?: $deviceId];
             log_message('info', "[Gateway::pair] FCM Token registered for Device '{$deviceId}' ({$simLabel})");
         }
 
-        // 7. Mark pairing code used
+        // 8. Mark pairing code used
         $this->pairingModel->markAsUsed($validPairing['id'], $deviceId);
 
-        // 8. Audit log
+        // 9. Audit log
         $this->auditLogModel->log(
             actorType: 'GATEWAY',
             actorId: $deviceId,
             action: 'DEVICE_PAIRED',
             target: $deviceName,
             metadata: [
-                'sim_operator' => $simOperator,
-                'device_model' => $raw['device_model'] ?? null,
-                'os_version'   => $raw['os_version'] ?? null,
+                'sim_operator'     => $simOperator,
+                'phone_number'     => $phoneNumber,
+                'fcm_registered'   => !empty($fcmToken),
+                'registered_lines' => $registeredLines,
+                'device_model'     => $raw['device_model'] ?? null,
+                'os_version'       => $raw['os_version'] ?? null,
             ]
         );
 
-        log_message('info', "[Gateway::pair] Device successfully paired! ID: {$deviceId} | Name: {$deviceName} | Operator: {$simOperator}");
+        log_message('info', "[Gateway::pair] Device successfully paired! ID: {$deviceId} | Name: {$deviceName} | Phone: {$phoneNumber}");
 
         return $this->response->setStatusCode(200)->setJSON([
             'status'  => 'success',
-            'message' => 'Device successfully paired to SMS Gateway.',
+            'message' => 'Device and SIM lines successfully paired to SMS Gateway.',
             'data'    => [
-                'device_id'     => $deviceId,
-                'device_name'   => $deviceName,
-                'device_token'  => $rawToken,
-                'server_time'   => date('Y-m-d H:i:s'),
+                'device_id'        => $deviceId,
+                'device_name'      => $deviceName,
+                'token'            => $rawToken,
+                'device_token'     => $rawToken,
+                'phone_number'     => $phoneNumber,
+                'sim_slot'         => $simSlot,
+                'fcm_registered'   => !empty($fcmToken),
+                'registered_lines' => $registeredLines,
+                'server_time'      => date('Y-m-d H:i:s'),
             ],
         ]);
     }
