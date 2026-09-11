@@ -7,50 +7,75 @@ class FcmService
     /**
      * Get Firebase FCM configuration status
      */
+    /**
+     * Get Firebase FCM configuration status
+     */
     public static function getConfigStatus(): array
     {
-        $envFile = env('fcm.credentialsFile');
-        $possiblePaths = [
-            $envFile,
-            !empty($envFile) ? ROOTPATH . ltrim($envFile, '/') : null,
-            WRITEPATH . 'firebase/service-account.json',
-            ROOTPATH . 'writable/firebase/service-account.json',
-        ];
-
-        foreach ($possiblePaths as $p) {
-            if (!empty($p) && file_exists($p)) {
-                $json = @file_get_contents($p);
-                $creds = json_decode($json, true);
-                if ($creds && !empty($creds['project_id'])) {
-                    return [
-                        'configured' => true,
-                        'mode'       => 'HTTP_V1',
-                        'project_id' => $creds['project_id'],
-                        'client_email' => $creds['client_email'] ?? '',
-                        'file'       => basename($p),
-                    ];
-                }
-            }
-        }
-
-        $serverKey = env('fcm.serverKey', '');
-        if (!empty($serverKey)) {
+        $creds = self::loadCredentials();
+        if ($creds && !empty($creds['project_id'])) {
             return [
-                'configured' => true,
-                'mode'       => 'LEGACY',
-                'project_id' => null,
-                'client_email' => null,
-                'file'       => 'Server Key (Legacy)',
+                'configured'   => true,
+                'mode'         => 'HTTP_V1',
+                'project_id'   => $creds['project_id'],
+                'client_email' => $creds['client_email'] ?? '',
+                'file'         => $creds['_source'] ?? 'service-account.json',
             ];
         }
 
         return [
-            'configured' => false,
-            'mode'       => 'NONE',
-            'project_id' => null,
+            'configured'   => false,
+            'mode'         => 'NONE',
+            'project_id'   => null,
             'client_email' => null,
-            'file'       => null,
+            'file'         => null,
         ];
+    }
+
+    /**
+     * Helper to load service account credentials from files or env string
+     */
+    private static function loadCredentials(): ?array
+    {
+        // 1. Check direct JSON string in env (fcm.credentialsJson or fcm.serviceAccount)
+        $rawEnvJson = env('fcm.credentialsJson') ?: env('fcm.serviceAccount');
+        if (!empty($rawEnvJson)) {
+            $decoded = json_decode($rawEnvJson, true);
+            if (empty($decoded)) {
+                // Try base64 decode if encoded
+                $decoded = json_decode(base64_decode($rawEnvJson), true);
+            }
+            if ($decoded && !empty($decoded['project_id']) && !empty($decoded['private_key'])) {
+                $decoded['_source'] = 'Environment (.env fcm.credentialsJson)';
+                return $decoded;
+            }
+        }
+
+        // 2. Search standard file locations
+        $envFile = env('fcm.credentialsFile');
+        $possiblePaths = array_filter([
+            $envFile,
+            !empty($envFile) ? ROOTPATH . ltrim($envFile, '/') : null,
+            WRITEPATH . 'firebase/service-account.json',
+            ROOTPATH . 'writable/firebase/service-account.json',
+            WRITEPATH . 'service-account.json',
+            ROOTPATH . 'service-account.json',
+            APPPATH . 'Config/service-account.json',
+        ]);
+
+        foreach ($possiblePaths as $p) {
+            if (file_exists($p)) {
+                $json = @file_get_contents($p);
+                $creds = json_decode($json, true);
+                if ($creds && !empty($creds['project_id']) && !empty($creds['private_key'])) {
+                    $creds['_source'] = basename($p);
+                    $creds['_path'] = $p;
+                    return $creds;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -76,50 +101,27 @@ class FcmService
     }
 
     /**
-     * Internal FCM HTTP dispatcher (Supports both HTTP v1 Service Account and Legacy Server Key)
+     * Internal FCM HTTP dispatcher (HTTP v1 Service Account)
      */
     private static function sendDataNotification(string $fcmToken, array $dataPayload): bool
     {
-        // 1. Try Firebase HTTP v1 (service-account.json)
-        $envFile = env('fcm.credentialsFile');
-        $possiblePaths = [
-            $envFile,
-            !empty($envFile) ? ROOTPATH . ltrim($envFile, '/') : null,
-            WRITEPATH . 'firebase/service-account.json',
-            ROOTPATH . 'writable/firebase/service-account.json',
-        ];
+        $creds = self::loadCredentials();
 
-        $credentialsFile = null;
-        foreach ($possiblePaths as $p) {
-            if (!empty($p) && file_exists($p)) {
-                $credentialsFile = $p;
-                break;
-            }
+        if ($creds) {
+            return self::sendHttpV1WithCreds($creds, $fcmToken, $dataPayload);
         }
 
-        if ($credentialsFile) {
-            return self::sendHttpV1($credentialsFile, $fcmToken, $dataPayload);
-        }
-
-        // 2. Fallback to Firebase Legacy Server Key
-        $serverKey = env('fcm.serverKey', '');
-        if (!empty($serverKey)) {
-            return self::sendLegacy($serverKey, $fcmToken, $dataPayload);
-        }
-
-        log_message('warning', '[FCM] No Firebase credentials configured (neither service-account.json nor fcm.serverKey).');
+        log_message('error', '[FCM] No Google Firebase service-account.json found. Google disabled legacy FCM keys. Please upload service-account.json to writable/firebase/service-account.json');
         return false;
     }
 
     /**
      * Firebase Cloud Messaging HTTP v1 API
      */
-    private static function sendHttpV1(string $credentialsPath, string $fcmToken, array $dataPayload): bool
+    private static function sendHttpV1WithCreds(array $creds, string $fcmToken, array $dataPayload): bool
     {
-        $json = @file_get_contents($credentialsPath);
-        $creds = json_decode($json, true);
-        if (!$creds || empty($creds['client_email']) || empty($creds['private_key']) || empty($creds['project_id'])) {
-            log_message('error', "[FCM HTTP v1] Invalid service-account.json format at {$credentialsPath}.");
+        if (empty($creds['client_email']) || empty($creds['private_key']) || empty($creds['project_id'])) {
+            log_message('error', '[FCM HTTP v1] Invalid service-account.json: missing client_email, private_key, or project_id.');
             return false;
         }
 
