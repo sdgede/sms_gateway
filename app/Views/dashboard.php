@@ -494,24 +494,15 @@
                         <label>Device / Gateway Name</label>
                         <input type="text" id="deviceNameInput" class="form-control" placeholder="Contoh: Android Gateway Cabang 01" value="Android Gateway Device 01" required>
                     </div>
-                    <div class="form-group">
-                        <label>Masa Berlaku (Menit)</label>
-                        <select id="expiryMinutesInput" class="form-control">
-                            <option value="15" selected>15 Menit</option>
-                            <option value="30">30 Menit</option>
-                            <option value="60">1 Jam</option>
-                            <option value="1440">24 Jam</option>
-                        </select>
-                    </div>
                     <button type="submit" class="btn btn-primary" style="width: 100%;">
-                        Generate Pairing Code
+                        🔑 Generate Pairing Code
                     </button>
                 </form>
 
                 <div id="pairingDisplay" class="pairing-display">
                     <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Kode Pairing Android</div>
                     <div id="pairingCodeResult" class="pairing-code-text">------</div>
-                    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px;" id="pairingExpiryNote">Berlaku selama 15 menit</div>
+                    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px;" id="pairingExpiryNote">Aktif permanen sampai di-pairing</div>
                     <button class="btn btn-secondary btn-sm" onclick="copyPairingCode()">📋 Salin Kode</button>
                 </div>
             </div>

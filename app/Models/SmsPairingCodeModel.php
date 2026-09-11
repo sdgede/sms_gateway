@@ -29,19 +29,20 @@ class SmsPairingCodeModel extends Model
     protected $updatedField  = 'updated_at';
 
     /**
-     * Generate a new unique one-time pairing code
+     * Generate a new unique one-time pairing code (permanent until paired)
      */
-    public function generateCode(?string $deviceName = null, int $expiryMinutes = 15): array
+    public function generateCode(?string $deviceName = null, int $expiryMinutes = 525600): array
     {
         do {
             $code = strtoupper(substr(bin2hex(random_bytes(4)), 0, 6));
         } while ($this->where('code', $code)->where('is_used', 0)->first());
 
-        $expiresAt = date('Y-m-d H:i:s', strtotime("+{$expiryMinutes} minutes"));
+        // Permanent: set to 1 year ahead
+        $expiresAt = date('Y-m-d H:i:s', strtotime("+1 year"));
 
         $data = [
             'code'        => $code,
-            'device_name' => $deviceName,
+            'device_name' => $deviceName ?? 'Android Gateway Device',
             'expires_at'  => $expiresAt,
             'is_used'     => 0,
         ];
@@ -53,16 +54,14 @@ class SmsPairingCodeModel extends Model
     }
 
     /**
-     * Validate pairing code
+     * Validate pairing code (valid as long as it has not been used yet)
      */
     public function validateCode(string $code): ?array
     {
         $code = trim(strtoupper($code));
-        $now = date('Y-m-d H:i:s');
 
         return $this->where('code', $code)
             ->where('is_used', 0)
-            ->where('expires_at >=', $now)
             ->first();
     }
 

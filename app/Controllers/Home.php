@@ -63,9 +63,8 @@ class Home extends BaseController
         // 2. Pairing Codes
         $pairingCodes = $this->pairingModel->orderBy('id', 'DESC')->findAll(10);
         foreach ($pairingCodes as &$code) {
-            $isExpired = strtotime($code['expires_at']) < $now;
-            $code['is_expired'] = $isExpired;
-            $code['status_label'] = $code['is_used'] ? 'USED' : ($isExpired ? 'EXPIRED' : 'ACTIVE');
+            $code['is_expired'] = false;
+            $code['status_label'] = $code['is_used'] ? 'USED' : 'ACTIVE';
         }
 
         // 3. SMS Jobs (latest 50)
@@ -95,20 +94,15 @@ class Home extends BaseController
     public function generatePairing(): ResponseInterface
     {
         $deviceName = trim($this->request->getPost('device_name') ?? 'Android Gateway Device');
-        $expiryMinutes = (int)($this->request->getPost('expiry_minutes') ?? 15);
 
-        if ($expiryMinutes < 1 || $expiryMinutes > 1440) {
-            $expiryMinutes = 15;
-        }
-
-        $pairing = $this->pairingModel->generateCode($deviceName, $expiryMinutes);
+        $pairing = $this->pairingModel->generateCode($deviceName);
 
         $this->auditLogModel->log(
             actorType: 'ADMIN',
             actorId: 'WEB_UI',
             action: 'PAIRING_CODE_GENERATED',
             target: $pairing['code'],
-            metadata: ['device_name' => $deviceName, 'expiry_minutes' => $expiryMinutes]
+            metadata: ['device_name' => $deviceName]
         );
 
         return $this->response->setJSON([
