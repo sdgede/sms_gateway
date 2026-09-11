@@ -1,5 +1,11 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
+
+    # Forward WebSocket connections on Port 443 (WSS) to local daemon (Port 8085)
+    RewriteCond %{HTTP:Upgrade} websocket [NC]
+    RewriteRule ^(.*)$ ws://127.0.0.1:8085/$1 [P,L]
+
+    # Forward normal web/API traffic to public/
     RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
 
