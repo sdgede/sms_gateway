@@ -198,6 +198,12 @@ class GatewayApiController extends BaseController
         $gateway = $this->getAuthenticatedGateway();
         $json = $this->extractRequestData();
 
+        $battery = $json['battery_level'] ?? $json['batteryLevel'] ?? '-';
+        $signal = $json['signal_strength'] ?? $json['signalStrength'] ?? '-';
+        $charging = !empty($json['is_charging']) || !empty($json['isCharging']) ? 'Yes' : 'No';
+
+        log_message('info', "[Gateway::heartbeat] Device '{$gateway['device_name']}' ({$gateway['device_id']}) Heartbeat | Battery: {$battery}% (Charging: {$charging}) | Signal: {$signal}%");
+
         $this->gatewayModel->recordHeartbeat($gateway['device_id'], $json ?? []);
 
         return $this->response->setJSON([
@@ -218,6 +224,8 @@ class GatewayApiController extends BaseController
     public function profile(): ResponseInterface
     {
         $gateway = $this->getAuthenticatedGateway();
+        log_message('info', "[Gateway::profile] Device '{$gateway['device_name']}' ({$gateway['device_id']}) requested profile data");
+
         unset($gateway['token_hash']);
 
         return $this->response->setJSON([
@@ -233,6 +241,8 @@ class GatewayApiController extends BaseController
     public function revoke(): ResponseInterface
     {
         $gateway = $this->getAuthenticatedGateway();
+        log_message('warning', "[Gateway::revoke] Device '{$gateway['device_name']}' ({$gateway['device_id']}) requested TOKEN REVOCATION");
+
         $this->gatewayModel->revokeToken($gateway['device_id']);
 
         $this->auditLogModel->log(
@@ -258,6 +268,8 @@ class GatewayApiController extends BaseController
 
         // Check Rate Limit
         if ($this->gatewayModel->isRateLimitExceeded($gateway)) {
+            log_message('warning', "[Gateway::jobs/next] Device '{$gateway['device_name']}' ({$gateway['device_id']}) hit RATE LIMIT");
+
             return $this->response->setStatusCode(429)->setJSON([
                 'status'  => 'error',
                 'code'    => 'RATE_LIMIT_EXCEEDED',
@@ -272,6 +284,11 @@ class GatewayApiController extends BaseController
         }
 
         $jobs = $this->jobModel->getNextAvailableJobs($limit);
+
+        if (!empty($jobs)) {
+            $jobIds = array_column($jobs, 'job_id');
+            log_message('info', "[Gateway::jobs/next] Device '{$gateway['device_name']}' ({$gateway['device_id']}) fetched " . count($jobs) . " PENDING job(s): " . implode(', ', $jobIds));
+        }
 
         return $this->response->setJSON([
             'status' => 'success',
@@ -288,9 +305,13 @@ class GatewayApiController extends BaseController
         $gateway = $this->getAuthenticatedGateway();
         $lockTimeout = (int)($this->request->getGet('lock_seconds') ?? 60);
 
+        log_message('info', "[Gateway::claim] Device '{$gateway['device_name']}' ({$gateway['device_id']}) attempting to claim Job: '{$jobId}'");
+
         $claimed = $this->jobModel->claimJob($jobId, $gateway['device_id'], $lockTimeout);
 
         if (!$claimed) {
+            log_message('warning', "[Gateway::claim] FAILED claim Job '{$jobId}' by Device '{$gateway['device_id']}' (already claimed or not pending)");
+
             return $this->response->setStatusCode(409)->setJSON([
                 'status'  => 'error',
                 'code'    => 'JOB_CLAIM_FAILED',
@@ -299,6 +320,7 @@ class GatewayApiController extends BaseController
         }
 
         $job = $this->jobModel->findByJobId($jobId);
+        log_message('info', "[Gateway::claim] SUCCESS Job '{$jobId}' locked & assigned to Device '{$gateway['device_id']}'");
 
         return $this->response->setJSON([
             'status'  => 'success',
@@ -314,9 +336,13 @@ class GatewayApiController extends BaseController
     public function startJob(string $jobId): ResponseInterface
     {
         $gateway = $this->getAuthenticatedGateway();
+        log_message('info', "[Gateway::start] Device '{$gateway['device_name']}' ({$gateway['device_id']}) starting to send Job: '{$jobId}' via SmsManager");
+
         $updated = $this->jobModel->markAsSending($jobId, $gateway['device_id']);
 
         if (!$updated) {
+            log_message('error', "[Gateway::start] FAILED to mark Job '{$jobId}' as SENDING for Device '{$gateway['device_id']}'");
+
             return $this->response->setStatusCode(400)->setJSON([
                 'status'  => 'error',
                 'code'    => 'START_JOB_FAILED',
@@ -338,6 +364,9 @@ class GatewayApiController extends BaseController
     {
         $gateway = $this->getAuthenticatedGateway();
         $raw = $this->extractRequestData();
+        $rawBodyString = (string)$this->request->getBody();
+
+        log_message('info', "[Gateway::report] Incoming status report for Job '{$jobId}' from Device '{$gateway['device_id']}' | Payload: {$rawBodyString}");
 
         $json = [
             'status'                  => strtoupper(trim((string)($raw['status'] ?? ''))),
@@ -356,11 +385,18 @@ class GatewayApiController extends BaseController
         ];
 
         if (!$this->validateData($json, $rules)) {
+            $errors = $this->validator->getErrors();
+            log_message('error', "[Gateway::report] 422 Validation Error on report: " . json_encode($errors) . " | Raw: {$rawBodyString}");
+
             return $this->response->setStatusCode(422)->setJSON([
                 'status'  => 'error',
                 'code'    => 'VALIDATION_FAILED',
-                'message' => 'Invalid report data.',
-                'errors'  => $this->validator->getErrors(),
+                'message' => 'Invalid report data: ' . implode(', ', $errors),
+                'errors'  => $errors,
+                'debug'   => [
+                    'received_raw_body' => $rawBodyString,
+                    'parsed_fields'     => $json,
+                ],
             ]);
         }
 
@@ -381,11 +417,15 @@ class GatewayApiController extends BaseController
 
         if ($status === 'SENT') {
             $this->jobModel->markAsSent($jobId, $gateway['device_id']);
+            log_message('info', "[Gateway::report] SUCCESS: Job '{$jobId}' status updated to SENT (Handed to cellular network)");
         } elseif ($status === 'DELIVERED') {
             $this->jobModel->markAsDelivered($jobId, $gateway['device_id']);
+            log_message('info', "[Gateway::report] SUCCESS: Job '{$jobId}' status updated to DELIVERED (Handset received)");
         } elseif ($status === 'FAILED') {
             $isRecoverable = isset($json['is_recoverable']) ? (bool)$json['is_recoverable'] : true;
             $failResult = $this->jobModel->markAsFailed($jobId, $gateway['device_id'], $statusMsg ?? 'Operator send error', $isRecoverable);
+
+            log_message('warning', "[Gateway::report] FAILED: Job '{$jobId}' error recorded. Outcome: " . json_encode($failResult));
 
             return $this->response->setJSON([
                 'status'  => 'success',
