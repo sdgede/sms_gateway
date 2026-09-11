@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SMS Gateway - Control & Monitoring Center</title>
-    <!-- Google Fonts: Plus Jakarta Sans -->
+    <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -67,6 +67,8 @@
             backdrop-filter: blur(16px);
             border: 1px solid var(--border-color);
             border-radius: 16px;
+            flex-wrap: wrap;
+            gap: 16px;
         }
 
         .brand {
@@ -101,7 +103,8 @@
         .header-actions {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
         .pulse-badge {
@@ -126,6 +129,19 @@
             animation: pulse-animation 1.5s infinite;
         }
 
+        .fcm-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(99, 102, 241, 0.12);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #818cf8;
+        }
+
         @keyframes pulse-animation {
             0% { transform: scale(0.95); opacity: 0.8; }
             50% { transform: scale(1.3); opacity: 1; }
@@ -135,7 +151,7 @@
         /* Stat Grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 16px;
             margin-bottom: 24px;
         }
@@ -217,6 +233,65 @@
             gap: 10px;
         }
 
+        /* Custom Tabs in Right Panel */
+        .tab-nav {
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 18px;
+            padding-bottom: 10px;
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-muted);
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .tab-btn.active {
+            background: rgba(99, 102, 241, 0.15);
+            color: #818cf8;
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .tab-badge {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            padding: 2px 6px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+        }
+
+        .tab-btn.active .tab-badge {
+            background: rgba(99, 102, 241, 0.3);
+            color: #c7d2fe;
+        }
+
+        .tab-pane {
+            display: none;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
         /* Forms */
         .form-group {
             margin-bottom: 16px;
@@ -249,10 +324,11 @@
         }
 
         textarea.form-control {
-            min-height: 80px;
+            min-height: 90px;
             resize: vertical;
         }
 
+        /* Buttons */
         .btn {
             display: inline-flex;
             align-items: center;
@@ -263,36 +339,36 @@
             font-size: 13px;
             font-weight: 600;
             cursor: pointer;
-            border: none;
             transition: all 0.2s;
-            text-decoration: none;
+            border: none;
+            outline: none;
         }
 
         .btn-primary {
             background: linear-gradient(135deg, #6366f1, #4f46e5);
             color: white;
-            box-shadow: 0 4px 12px var(--primary-glow);
+            box-shadow: 0 0 15px var(--primary-glow);
         }
 
         .btn-primary:hover {
-            opacity: 0.95;
             transform: translateY(-1px);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
         }
 
         .btn-secondary {
-            background: rgba(255, 255, 255, 0.06);
-            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
             border: 1px solid var(--border-color);
         }
 
         .btn-secondary:hover {
             background: rgba(255, 255, 255, 0.1);
-            color: var(--text-main);
+            border-color: rgba(255, 255, 255, 0.2);
         }
 
         .btn-sm {
             padding: 6px 12px;
-            font-size: 11px;
+            font-size: 12px;
             border-radius: 8px;
         }
 
@@ -439,6 +515,9 @@
                 <span class="pulse-dot"></span>
                 <span id="liveStatusText">GATEWAY ENGINE ACTIVE</span>
             </div>
+            <div class="fcm-badge" id="fcmStatusBadge">
+                🔥 FCM: Checking...
+            </div>
             <button class="btn btn-secondary btn-sm" onclick="runWorker()">
                 ⚡ Run Worker
             </button>
@@ -456,9 +535,9 @@
             <div class="stat-sub" id="statGatewaysSub">No devices connected</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">Total Messages</div>
+            <div class="stat-label">Total Outbound</div>
             <div class="stat-value" id="statTotal">0</div>
-            <div class="stat-sub">Lifetime queued</div>
+            <div class="stat-sub">Queued SMS</div>
         </div>
         <div class="stat-card">
             <div class="stat-label">Delivered</div>
@@ -471,9 +550,14 @@
             <div class="stat-sub" id="statPendingSub">0 pending, 0 sending</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">Failed / Retry</div>
-            <div class="stat-value" style="color: var(--danger);" id="statFailed">0</div>
-            <div class="stat-sub" id="statRetrySub">0 scheduled retries</div>
+            <div class="stat-label">SIM Lines (FCM)</div>
+            <div class="stat-value" style="color: #818cf8;" id="statPhoneLines">0</div>
+            <div class="stat-sub">Registered SIMs</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">SMS Masuk (Inbox)</div>
+            <div class="stat-value" style="color: var(--info);" id="statIncoming">0</div>
+            <div class="stat-sub">Total received</div>
         </div>
     </div>
 
@@ -486,7 +570,7 @@
             <div class="panel">
                 <div class="panel-header">
                     <div class="panel-title">
-                        Generate One-Time Pairing Code
+                        🔑 Generate One-Time Pairing Code
                     </div>
                 </div>
                 <form id="pairingForm" onsubmit="handleGeneratePairing(event)">
@@ -555,75 +639,154 @@
                         <input type="text" id="clientMsgIdInput" class="form-control" placeholder="Otomatis jika kosong (e.g. TRX-2026...)">
                     </div>
                     <button type="submit" class="btn btn-primary" style="width: 100%;">
-                        🚀 Masukkan ke Antrean SMS
+                        🚀 Masukkan ke Antrean SMS (Trigger FCM)
                     </button>
                 </form>
             </div>
         </div>
 
-        <!-- Right Column: Monitoring Tables -->
+        <!-- Right Column: Tabs & Monitoring Tables -->
         <div>
-            <!-- Devices Table -->
             <div class="panel">
-                <div class="panel-header">
-                    <div class="panel-title">
-                        📡 Perangkat Android Gateway Terhubung
-                    </div>
-                    <span class="mono-tag" id="lastUpdatedTag">Updated just now</span>
+                <!-- Navigation Tabs -->
+                <div class="tab-nav">
+                    <button class="tab-btn active" onclick="switchTab('queue')">
+                        📋 Antrean SMS <span class="tab-badge" id="tabBadgeQueue">0</span>
+                    </button>
+                    <button class="tab-btn" onclick="switchTab('inbox')">
+                        📥 SMS Masuk (Inbox) <span class="tab-badge" id="tabBadgeInbox">0</span>
+                    </button>
+                    <button class="tab-btn" onclick="switchTab('lines')">
+                        📱 SIM Lines & FCM <span class="tab-badge" id="tabBadgeLines">0</span>
+                    </button>
+                    <button class="tab-btn" onclick="switchTab('devices')">
+                        📡 Perangkat Android <span class="tab-badge" id="tabBadgeDevices">0</span>
+                    </button>
                 </div>
-                <div class="table-responsive">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Device Name / ID</th>
-                                <th>Status</th>
-                                <th>SIM / Operator</th>
-                                <th>Baterai / Sinyal</th>
-                                <th>Last Seen</th>
-                                <th>Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody id="gatewaysTableBody">
-                            <tr>
-                                <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 24px;">
-                                    Memuat data gateway...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
 
-            <!-- SMS Queue Table -->
-            <div class="panel">
-                <div class="panel-header">
-                    <div class="panel-title">
-                        📋 Antrean & Aktivitas SMS (Live Feed)
+                <!-- Tab 1: SMS Outbound Queue -->
+                <div id="tabPaneQueue" class="tab-pane active">
+                    <div class="panel-header" style="margin-bottom: 12px; border: none; padding: 0;">
+                        <div style="font-size: 13px; font-weight: 600; color: var(--text-muted);">
+                            Riwayat Antrean & Pengiriman SMS
+                        </div>
+                        <span class="mono-tag" id="lastUpdatedTag">Updated just now</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Job ID / Ref</th>
+                                    <th>Penerima</th>
+                                    <th>Pesan</th>
+                                    <th>Status</th>
+                                    <th>Attempt</th>
+                                    <th>Device</th>
+                                    <th>Waktu</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="jobsTableBody">
+                                <tr>
+                                    <td colspan="8" style="text-align: center; color: var(--text-dim); padding: 24px;">
+                                        Belum ada antrean SMS.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                <div class="table-responsive">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Job ID / Ref</th>
-                                <th>Penerima</th>
-                                <th>Pesan</th>
-                                <th>Status</th>
-                                <th>Attempt</th>
-                                <th>Device</th>
-                                <th>Waktu</th>
-                                <th>Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody id="jobsTableBody">
-                            <tr>
-                                <td colspan="8" style="text-align: center; color: var(--text-dim); padding: 24px;">
-                                    Belum ada antrean SMS.
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+
+                <!-- Tab 2: Incoming SMS Inbox -->
+                <div id="tabPaneInbox" class="tab-pane">
+                    <div class="panel-header" style="margin-bottom: 12px; border: none; padding: 0;">
+                        <div style="font-size: 13px; font-weight: 600; color: var(--text-muted);">
+                            Pesan Masuk yang Diterima oleh HP Gateway
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID / Ref</th>
+                                    <th>Pengirim (From)</th>
+                                    <th>SIM / Nomor Gateway</th>
+                                    <th>Isi Pesan SMS</th>
+                                    <th>Waktu Diterima</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inboxTableBody">
+                                <tr>
+                                    <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 24px;">
+                                        Belum ada SMS masuk.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
+
+                <!-- Tab 3: Registered SIM Lines & FCM -->
+                <div id="tabPaneLines" class="tab-pane">
+                    <div class="panel-header" style="margin-bottom: 12px; border: none; padding: 0;">
+                        <div style="font-size: 13px; font-weight: 600; color: var(--text-muted);">
+                            Jalur SIM & Token Push Firebase Cloud Messaging
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Nomor Telepon</th>
+                                    <th>SIM Slot</th>
+                                    <th>Token FCM</th>
+                                    <th>Status Push</th>
+                                    <th>Terakhir Sinkron</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="linesTableBody">
+                                <tr>
+                                    <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 24px;">
+                                        Belum ada SIM Line terdaftar. Lakukan login di aplikasi Android.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Android Devices -->
+                <div id="tabPaneDevices" class="tab-pane">
+                    <div class="panel-header" style="margin-bottom: 12px; border: none; padding: 0;">
+                        <div style="font-size: 13px; font-weight: 600; color: var(--text-muted);">
+                            Perangkat Android yang Terhubung / Dipasangkan
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Device Name / ID</th>
+                                    <th>Status</th>
+                                    <th>SIM / Operator</th>
+                                    <th>Baterai / Sinyal</th>
+                                    <th>Last Seen</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="gatewaysTableBody">
+                                <tr>
+                                    <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 24px;">
+                                        Memuat data gateway...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -638,6 +801,26 @@
     const BASE_URL = '<?= rtrim(base_url(), "/") ?>';
     let latestPairingCode = '';
 
+    // Tab Switching
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+
+        if (tabId === 'queue') {
+            document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+            document.getElementById('tabPaneQueue').classList.add('active');
+        } else if (tabId === 'inbox') {
+            document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+            document.getElementById('tabPaneInbox').classList.add('active');
+        } else if (tabId === 'lines') {
+            document.querySelector('.tab-btn:nth-child(3)').classList.add('active');
+            document.getElementById('tabPaneLines').classList.add('active');
+        } else if (tabId === 'devices') {
+            document.querySelector('.tab-btn:nth-child(4)').classList.add('active');
+            document.getElementById('tabPaneDevices').classList.add('active');
+        }
+    }
+
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
         fetchLiveData();
@@ -649,53 +832,78 @@
         const container = document.getElementById('toastContainer');
         const toast = document.createElement('div');
         toast.className = 'toast';
-        const icon = type === 'success' ? '✅' : (type === 'error' ? '❌' : 'ℹ️');
-        toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
+        
+        let icon = 'ℹ️';
+        if (type === 'success') icon = '✅';
+        if (type === 'error') icon = '⚠️';
+
+        toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
         container.appendChild(toast);
+
         setTimeout(() => {
             toast.style.opacity = '0';
-            toast.style.transform = 'translateY(10px)';
+            toast.style.transform = 'translateX(100%)';
             toast.style.transition = 'all 0.3s ease';
             setTimeout(() => toast.remove(), 300);
         }, 3500);
     }
 
-    function updateCharCount() {
-        const text = document.getElementById('messageInput')?.value || '';
-        const chars = text.length;
-        document.getElementById('charCount').innerText = `${chars} karakter`;
-        const sms = Math.ceil(chars / 160) || 1;
-        document.getElementById('smsCount').innerText = `${sms} SMS`;
-    }
-
-    // Fetch Live Data
+    // Fetch Live Dashboard Data
     async function fetchLiveData() {
         try {
             const res = await fetch(`${BASE_URL}/web/data`);
+            if (!res.ok) throw new Error('Gagal mengambil data dari server');
             const result = await res.json();
+
             if (result.status === 'success') {
                 renderDashboard(result.data);
             }
-        } catch (e) {
-            console.error('Polling error:', e);
+        } catch (err) {
+            console.error('Polling error:', err);
         }
     }
 
+    // Render Data into DOM
     function renderDashboard(data) {
-        const stats = data.stats;
-        document.getElementById('statGateways').innerText = `${stats.gateways_online} / ${stats.gateways_count}`;
-        document.getElementById('statGatewaysSub').innerText = `${stats.gateways_online} online & ready`;
+        // FCM Status Badge
+        const fcmBadge = document.getElementById('fcmStatusBadge');
+        if (data.fcm_status && data.fcm_status.configured) {
+            fcmBadge.innerHTML = `🔥 FCM: Active (${data.fcm_status.mode})`;
+            fcmBadge.style.color = '#34d399';
+            fcmBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+            fcmBadge.style.background = 'rgba(16, 185, 129, 0.12)';
+        } else {
+            fcmBadge.innerHTML = `⚠️ FCM: Not Configured`;
+            fcmBadge.style.color = '#fbbf24';
+            fcmBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+            fcmBadge.style.background = 'rgba(245, 158, 11, 0.12)';
+        }
 
-        document.getElementById('statTotal').innerText = stats.total;
-        document.getElementById('statDelivered').innerText = stats.delivered;
-        const rate = stats.total > 0 ? Math.round((stats.delivered / stats.total) * 100) : 0;
-        document.getElementById('statDeliveryRate').innerText = `${rate}% delivery rate`;
+        // Stats
+        const stats = data.stats || {};
+        document.getElementById('statGateways').innerText = `${stats.gateways_online || 0} / ${stats.gateways_count || 0}`;
+        document.getElementById('statGatewaysSub').innerText = stats.gateways_online > 0 ? `${stats.gateways_online} ready to dispatch` : 'No active devices';
 
-        document.getElementById('statPending').innerText = stats.pending + stats.sending;
-        document.getElementById('statPendingSub').innerText = `${stats.pending} pending, ${stats.sending} sending`;
+        document.getElementById('statTotal').innerText = stats.total_jobs || 0;
+        document.getElementById('statDelivered').innerText = (stats.delivered || 0) + (stats.sent || 0);
+        
+        const total = stats.total_jobs || 0;
+        const success = (stats.delivered || 0) + (stats.sent || 0);
+        const rate = total > 0 ? Math.round((success / total) * 100) : 0;
+        document.getElementById('statDeliveryRate').innerText = `${rate}% success rate`;
 
-        document.getElementById('statFailed').innerText = stats.failed_permanent + stats.retry;
-        document.getElementById('statRetrySub').innerText = `${stats.retry} scheduled retry`;
+        const pending = (stats.pending || 0) + (stats.claimed || 0) + (stats.sending || 0);
+        document.getElementById('statPending').innerText = pending;
+        document.getElementById('statPendingSub').innerText = `${stats.pending || 0} pending, ${stats.sending || 0} sending`;
+
+        document.getElementById('statPhoneLines').innerText = data.stats.phone_lines_count || (data.phone_lines || []).length;
+        document.getElementById('statIncoming').innerText = data.stats.incoming_count || (data.incoming_messages || []).length;
+
+        // Tab Badges
+        document.getElementById('tabBadgeQueue').innerText = (data.jobs || []).length;
+        document.getElementById('tabBadgeInbox').innerText = (data.incoming_messages || []).length;
+        document.getElementById('tabBadgeLines').innerText = (data.phone_lines || []).length;
+        document.getElementById('tabBadgeDevices').innerText = (data.gateways || []).length;
 
         document.getElementById('lastUpdatedTag').innerText = `Updated ${new Date().toLocaleTimeString()}`;
 
@@ -781,7 +989,7 @@
             }).join('');
         }
 
-        // Render Jobs Table
+        // Render Jobs Table (Queue)
         const jobsTbody = document.getElementById('jobsTableBody');
         if (!data.jobs || data.jobs.length === 0) {
             jobsTbody.innerHTML = `
@@ -837,6 +1045,92 @@
                 `;
             }).join('');
         }
+
+        // Render SIM Lines Table
+        const linesTbody = document.getElementById('linesTableBody');
+        if (!data.phone_lines || data.phone_lines.length === 0) {
+            linesTbody.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 24px;">
+                        Belum ada SIM Line yang terdaftar dengan FCM Token.
+                    </td>
+                </tr>
+            `;
+        } else {
+            linesTbody.innerHTML = data.phone_lines.map(l => `
+                <tr>
+                    <td>
+                        <div style="font-weight: 600; font-family: var(--font-mono); font-size: 14px; color: #818cf8;">
+                            ${escapeHtml(l.phone_number)}
+                        </div>
+                        <div class="mono-tag">${escapeHtml(l.id)}</div>
+                    </td>
+                    <td>
+                        <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3);">
+                            ${escapeHtml(l.sim || 'SIM_1')}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="mono-tag" title="${escapeHtml(l.fcm_token || '')}">
+                            ${escapeHtml(l.fcm_preview || 'None')}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge ${l.has_fcm ? 'badge-online' : 'badge-offline'}">
+                            ${l.has_fcm ? 'FCM READY' : 'NO TOKEN'}
+                        </span>
+                    </td>
+                    <td>
+                        <div style="font-size: 12px;">${l.updated_human || '-'}</div>
+                    </td>
+                    <td>
+                        <button class="btn btn-danger-subtle btn-sm" style="padding: 4px 8px; font-size: 11px;" title="Hapus Line" onclick="handleDeletePhoneLine('${l.id}')">
+                            🗑️
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Render Incoming SMS (Inbox)
+        const inboxTbody = document.getElementById('inboxTableBody');
+        if (!data.incoming_messages || data.incoming_messages.length === 0) {
+            inboxTbody.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 24px;">
+                        Belum ada SMS masuk yang diterima.
+                    </td>
+                </tr>
+            `;
+        } else {
+            inboxTbody.innerHTML = data.incoming_messages.map(m => `
+                <tr>
+                    <td>
+                        <div class="mono-tag" style="color: var(--info); font-weight: 600;">${escapeHtml(m.message_id)}</div>
+                    </td>
+                    <td>
+                        <div style="font-weight: 600; font-family: var(--font-mono); color: #38bdf8;">
+                            ${escapeHtml(m.sender_phone)}
+                        </div>
+                    </td>
+                    <td>
+                        <div>${escapeHtml(m.recipient_phone || '-')}</div>
+                        <div class="mono-tag">${escapeHtml(m.sim || 'SIM_1')}</div>
+                    </td>
+                    <td style="max-width: 250px; white-space: normal;" title="${escapeHtml(m.message)}">
+                        ${escapeHtml(m.message)}
+                    </td>
+                    <td>
+                        <div style="font-size: 12px;">${m.received_human || m.received_at || '-'}</div>
+                    </td>
+                    <td>
+                        <button class="btn btn-danger-subtle btn-sm" style="padding: 4px 8px; font-size: 11px;" title="Hapus SMS Masuk" onclick="handleDeleteIncoming('${m.id}')">
+                            🗑️
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
     }
 
     // Set Message Presets
@@ -850,207 +1144,273 @@
             msgInput.value = `Kode verifikasi OTP Anda adalah ${randCode}. Berlaku selama 5 menit. JANGAN bagikan kode ini kepada siapapun.`;
             prioInput.value = '1';
         } else if (type === 'trx') {
-            const randRef = 'TRX-' + Math.floor(10000 + Math.random() * 90000);
-            msgInput.value = `Transfer berhasil sebesar Rp 250.000 ke rek 1002938481 a/n Budi Santoso. Ref: ${randRef}. Terima kasih.`;
-            prioInput.value = '1';
-        } else if (type === 'notif') {
-            msgInput.value = `Pengingat: Tagihan Anda sebesar Rp 150.000 akan jatuh tempo pada 15 September 2026. Abaikan jika sudah membayar.`;
+            const nominal = (Math.floor(Math.random() * 10) + 1) * 50000;
+            msgInput.value = `Pembayaran berhasil! Saldo Anda berkurang Rp ${nominal.toLocaleString('id-ID')} untuk transaksi di Toko Online. Sisa saldo: Rp 2.500.000.`;
             prioInput.value = '2';
+        } else if (type === 'notif') {
+            msgInput.value = `Halo, pengingat jadwal layanan Anda besok pukul 10:00 WIB. Mohon hadir 15 menit sebelum waktu yang ditentukan. Terima kasih.`;
+            prioInput.value = '3';
         }
         if (!recInput.value) {
-            recInput.focus();
+            recInput.value = '081234567890';
         }
         updateCharCount();
-        showToast('Preset pesan dimuat!', 'info');
     }
 
-    // Requeue SMS Handler
-    async function handleRequeueSms(jobId) {
-        const formData = new FormData();
-        formData.append('job_id', jobId);
+    // Calculate Character & SMS Parts
+    function updateCharCount() {
+        const text = document.getElementById('messageInput').value || '';
+        const len = text.length;
+        document.getElementById('charCount').innerText = `${len} karakter`;
 
-        try {
-            const res = await fetch(`${BASE_URL}/web/sms/requeue`, {
-                method: 'POST',
-                body: formData
-            });
-            const result = await res.json();
-            if (result.status === 'success') {
-                showToast(result.message, 'success');
-                fetchLiveData();
-            } else {
-                showToast(result.message || 'Gagal requeue SMS', 'error');
-            }
-        } catch (err) {
-            showToast('Connection error: ' + err.message, 'error');
+        let smsParts = 1;
+        if (len > 160) {
+            smsParts = Math.ceil(len / 153);
         }
+        document.getElementById('smsCount').innerText = `${smsParts} SMS (${smsParts * 160} maks)`;
     }
 
-    // Delete SMS Handler
-    async function handleDeleteSms(jobId) {
-        if (!confirm(`Hapus SMS job ${jobId} dari antrean?`)) return;
-
-        const formData = new FormData();
-        formData.append('job_id', jobId);
-
-        try {
-            const res = await fetch(`${BASE_URL}/web/sms/delete`, {
-                method: 'POST',
-                body: formData
-            });
-            const result = await res.json();
-            if (result.status === 'success') {
-                showToast(result.message, 'success');
-                fetchLiveData();
-            } else {
-                showToast(result.message || 'Gagal menghapus SMS', 'error');
-            }
-        } catch (err) {
-            showToast('Connection error: ' + err.message, 'error');
-        }
-    }
-
-    // Generate Pairing Code Form Handler
+    // Generate Pairing Code
     async function handleGeneratePairing(e) {
         e.preventDefault();
-        const deviceName = document.getElementById('deviceNameInput')?.value || 'Android Gateway Device';
-
-        const formData = new FormData();
-        formData.append('device_name', deviceName);
+        const deviceName = document.getElementById('deviceNameInput').value;
 
         try {
+            const formData = new FormData();
+            formData.append('device_name', deviceName);
+
             const res = await fetch(`${BASE_URL}/web/pairing/generate`, {
                 method: 'POST',
                 body: formData
             });
+
             const result = await res.json();
             if (result.status === 'success') {
                 latestPairingCode = result.data.code;
-                document.getElementById('pairingCodeResult').innerText = latestPairingCode;
-                document.getElementById('pairingExpiryNote').innerText = 'Aktif permanen sampai di-pairing';
+                document.getElementById('pairingCodeResult').innerText = result.data.code;
                 document.getElementById('pairingDisplay').style.display = 'block';
-                showToast(`Pairing code ${latestPairingCode} generated!`, 'success');
+                showToast(`Kode Pairing ${result.data.code} berhasil dibuat!`, 'success');
                 fetchLiveData();
             } else {
-                showToast(result.message || 'Failed to generate pairing code', 'error');
+                showToast(result.message || 'Gagal membuat pairing code', 'error');
             }
         } catch (err) {
-            showToast('Connection error: ' + err.message, 'error');
+            showToast(err.message, 'error');
         }
     }
 
+    // Copy Code Text
+    function copyCodeText(code) {
+        navigator.clipboard.writeText(code).then(() => {
+            showToast(`Kode ${code} disalin ke clipboard!`, 'success');
+        });
+    }
+
     function copyActivePairingCode() {
-        if (!latestPairingCode) return;
-        copyCodeText(latestPairingCode);
+        if (latestPairingCode) copyCodeText(latestPairingCode);
     }
 
-    function copyCodeText(text) {
-        navigator.clipboard.writeText(text);
-        showToast(`Kode ${text} disalin ke clipboard!`, 'success');
-    }
-
-    // Delete Unused Pairing Code
+    // Delete Pairing Code
     async function handleDeletePairing(id) {
         if (!confirm('Hapus kode pairing ini?')) return;
 
-        const formData = new FormData();
-        formData.append('id', id);
-
         try {
+            const formData = new FormData();
+            formData.append('id', id);
+
             const res = await fetch(`${BASE_URL}/web/pairing/delete`, {
                 method: 'POST',
                 body: formData
             });
+
             const result = await res.json();
             if (result.status === 'success') {
                 showToast(result.message, 'success');
                 fetchLiveData();
             } else {
-                showToast(result.message || 'Gagal menghapus kode pairing', 'error');
+                showToast(result.message, 'error');
             }
         } catch (err) {
-            showToast('Connection error: ' + err.message, 'error');
+            showToast(err.message, 'error');
         }
     }
 
-    // Send SMS Form Handler
+    // Send Test SMS
     async function handleSendSms(e) {
         e.preventDefault();
+
         const recipient = document.getElementById('recipientInput').value;
         const message = document.getElementById('messageInput').value;
         const priority = document.getElementById('priorityInput').value;
         const clientMsgId = document.getElementById('clientMsgIdInput').value;
 
-        const formData = new FormData();
-        formData.append('recipient', recipient);
-        formData.append('message', message);
-        formData.append('priority', priority);
-        formData.append('client_message_id', clientMsgId);
-
         try {
+            const formData = new FormData();
+            formData.append('recipient', recipient);
+            formData.append('message', message);
+            formData.append('priority', priority);
+            if (clientMsgId) formData.append('client_message_id', clientMsgId);
+
             const res = await fetch(`${BASE_URL}/web/sms/send`, {
                 method: 'POST',
                 body: formData
             });
+
             const result = await res.json();
             if (result.status === 'success') {
-                showToast(`SMS queued successfully! Job ID: ${result.data.job_id}`, 'success');
-                document.getElementById('messageInput').value = '';
+                showToast(result.message + ' (FCM Push triggered)', 'success');
                 document.getElementById('clientMsgIdInput').value = '';
-                updateCharCount();
                 fetchLiveData();
             } else {
-                showToast(result.message || 'Failed to queue SMS', 'error');
+                showToast(result.message || 'Gagal mengirim SMS', 'error');
             }
         } catch (err) {
-            showToast('Connection error: ' + err.message, 'error');
+            showToast(err.message, 'error');
         }
     }
 
-    // Gateway Action Handler (Revoke / Disable / Enable / Delete)
+    // Gateway Action
     async function handleGatewayAction(deviceId, action) {
-        const prompts = {
-            'revoke': 'Revoke token device ini? (Device harus pairing ulang untuk terhubung kembali)',
-            'disable': 'Nonaktifkan (Disable) device ini? (Device tidak akan menerima SMS)',
-            'enable': 'Aktifkan kembali (Enable) device ini?',
-            'delete': 'Hapus device ini secara permanen dari sistem?'
-        };
-
-        if (!confirm(prompts[action] || `Lakukan aksi '${action}' pada device ini?`)) return;
-
-        const formData = new FormData();
-        formData.append('device_id', deviceId);
-        formData.append('action', action);
+        if (action === 'delete' && !confirm(`Hapus device ${deviceId} permanen?`)) return;
+        if (action === 'revoke' && !confirm(`Revoke token device ${deviceId}? Device harus pairing ulang.`)) return;
 
         try {
+            const formData = new FormData();
+            formData.append('device_id', deviceId);
+            formData.append('action', action);
+
             const res = await fetch(`${BASE_URL}/web/gateway/action`, {
                 method: 'POST',
                 body: formData
             });
+
             const result = await res.json();
             if (result.status === 'success') {
                 showToast(result.message, 'success');
                 fetchLiveData();
             } else {
-                showToast(result.message || 'Action failed', 'error');
+                showToast(result.message, 'error');
             }
         } catch (err) {
-            showToast('Connection error: ' + err.message, 'error');
+            showToast(err.message, 'error');
         }
     }
 
-    // Run Background Worker
+    // Requeue SMS
+    async function handleRequeueSms(jobId) {
+        try {
+            const formData = new FormData();
+            formData.append('job_id', jobId);
+
+            const res = await fetch(`${BASE_URL}/web/sms/requeue`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await res.json();
+            if (result.status === 'success') {
+                showToast(result.message, 'success');
+                fetchLiveData();
+            } else {
+                showToast(result.message, 'error');
+            }
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    // Delete SMS Job
+    async function handleDeleteSms(jobId) {
+        if (!confirm(`Hapus pesan ${jobId}?`)) return;
+
+        try {
+            const formData = new FormData();
+            formData.append('job_id', jobId);
+
+            const res = await fetch(`${BASE_URL}/web/sms/delete`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await res.json();
+            if (result.status === 'success') {
+                showToast(result.message, 'success');
+                fetchLiveData();
+            } else {
+                showToast(result.message, 'error');
+            }
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    // Delete Phone Line
+    async function handleDeletePhoneLine(id) {
+        if (!confirm('Hapus registrasi SIM Line ini?')) return;
+
+        try {
+            const formData = new FormData();
+            formData.append('id', id);
+
+            const res = await fetch(`${BASE_URL}/web/phone-line/delete`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await res.json();
+            if (result.status === 'success') {
+                showToast(result.message, 'success');
+                fetchLiveData();
+            } else {
+                showToast(result.message, 'error');
+            }
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    // Delete Incoming SMS
+    async function handleDeleteIncoming(id) {
+        if (!confirm('Hapus pesan masuk ini?')) return;
+
+        try {
+            const formData = new FormData();
+            formData.append('id', id);
+
+            const res = await fetch(`${BASE_URL}/web/incoming/delete`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await res.json();
+            if (result.status === 'success') {
+                showToast(result.message, 'success');
+                fetchLiveData();
+            } else {
+                showToast(result.message, 'error');
+            }
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    // Run Background Worker Manually
     async function runWorker() {
         try {
-            const res = await fetch(`${BASE_URL}/web/worker/run`, { method: 'POST' });
+            const res = await fetch(`${BASE_URL}/web/worker/run`, {
+                method: 'POST'
+            });
             const result = await res.json();
-            showToast(result.message, 'success');
-            fetchLiveData();
+            if (result.status === 'success') {
+                showToast(result.message, 'success');
+                fetchLiveData();
+            }
         } catch (err) {
-            showToast('Failed to run worker: ' + err.message, 'error');
+            showToast('Gagal menjalankan worker: ' + err.message, 'error');
         }
     }
 
+    // Helper: Escape HTML
     function escapeHtml(str) {
         if (!str) return '';
         return String(str)

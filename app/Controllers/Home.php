@@ -2,11 +2,14 @@
 
 namespace App\Controllers;
 
+use App\Libraries\FcmService;
 use App\Models\SmsAuditLogModel;
 use App\Models\SmsDeliveryReportModel;
 use App\Models\SmsGatewayModel;
+use App\Models\SmsIncomingMessageModel;
 use App\Models\SmsJobModel;
 use App\Models\SmsPairingCodeModel;
+use App\Models\SmsPhoneLineModel;
 use CodeIgniter\HTTP\ResponseInterface;
 
 class Home extends BaseController
@@ -16,6 +19,8 @@ class Home extends BaseController
     protected SmsJobModel $jobModel;
     protected SmsDeliveryReportModel $reportModel;
     protected SmsAuditLogModel $auditLogModel;
+    protected SmsPhoneLineModel $phoneLineModel;
+    protected SmsIncomingMessageModel $incomingModel;
 
     public function __construct()
     {
@@ -24,6 +29,8 @@ class Home extends BaseController
         $this->jobModel = new SmsJobModel();
         $this->reportModel = new SmsDeliveryReportModel();
         $this->auditLogModel = new SmsAuditLogModel();
+        $this->phoneLineModel = new SmsPhoneLineModel();
+        $this->incomingModel = new SmsIncomingMessageModel();
     }
 
     /**
@@ -70,19 +77,41 @@ class Home extends BaseController
         // 3. SMS Jobs (latest 50)
         $jobs = $this->jobModel->orderBy('id', 'DESC')->findAll(50);
 
-        // 4. Aggregate Stats
+        // 4. Phone Lines (Registered FCM SIM Lines)
+        $phoneLines = $this->phoneLineModel->orderBy('updated_at', 'DESC')->findAll(20);
+        foreach ($phoneLines as &$pl) {
+            $pl['has_fcm'] = !empty($pl['fcm_token']);
+            $pl['fcm_preview'] = !empty($pl['fcm_token']) ? substr($pl['fcm_token'], 0, 14) . '...' . substr($pl['fcm_token'], -6) : 'None';
+            $pl['updated_human'] = !empty($pl['updated_at']) ? date('d M H:i', strtotime($pl['updated_at'])) : '-';
+        }
+
+        // 5. Incoming SMS (Inbox latest 50)
+        $incomingMessages = $this->incomingModel->orderBy('id', 'DESC')->findAll(50);
+        foreach ($incomingMessages as &$inc) {
+            $inc['received_human'] = !empty($inc['received_at']) ? date('d M H:i:s', strtotime($inc['received_at'])) : '-';
+        }
+
+        // 6. FCM Service Config Status
+        $fcmStatus = FcmService::getConfigStatus();
+
+        // 7. Aggregate Stats
         $stats = $this->jobModel->getStatistics();
         $stats['gateways_count'] = count($gateways);
         $stats['gateways_online'] = count(array_filter($gateways, fn($g) => ($g['computed_status'] ?? '') === 'ONLINE'));
+        $stats['phone_lines_count'] = count($phoneLines);
+        $stats['incoming_count'] = $this->incomingModel->countAllResults();
 
         return $this->response->setJSON([
             'status' => 'success',
             'data'   => [
-                'stats'         => $stats,
-                'gateways'      => $gateways,
-                'pairing_codes' => $pairingCodes,
-                'jobs'          => $jobs,
-                'server_time'   => date('Y-m-d H:i:s'),
+                'stats'             => $stats,
+                'gateways'          => $gateways,
+                'pairing_codes'     => $pairingCodes,
+                'phone_lines'       => $phoneLines,
+                'incoming_messages' => $incomingMessages,
+                'jobs'              => $jobs,
+                'fcm_status'        => $fcmStatus,
+                'server_time'       => date('Y-m-d H:i:s'),
             ],
         ]);
     }
@@ -289,17 +318,50 @@ class Home extends BaseController
     }
 
     /**
-     * Web UI: Run Background Worker manually
-     * POST /web/worker/run
+     * Web UI: Delete Phone Line
+     * POST /web/phone-line/delete
      */
-    public function runWorker(): ResponseInterface
+    public function deletePhoneLine(): ResponseInterface
     {
-        $recovered = $this->jobModel->recoverStaleClaims();
-        $retried = $this->jobModel->processRetries();
+        $id = trim($this->request->getPost('id') ?? '');
+        $line = $this->phoneLineModel->find($id);
+
+        if (!$line) {
+            return $this->response->setStatusCode(404)->setJSON([
+                'status'  => 'error',
+                'message' => 'Phone line not found.',
+            ]);
+        }
+
+        $this->phoneLineModel->delete($id);
 
         return $this->response->setJSON([
             'status'  => 'success',
-            'message' => "Worker executed: {$recovered} stale claims recovered, {$retried} retries released to PENDING.",
+            'message' => "Phone line {$line['phone_number']} deleted.",
+        ]);
+    }
+
+    /**
+     * Web UI: Delete Incoming SMS
+     * POST /web/incoming/delete
+     */
+    public function deleteIncoming(): ResponseInterface
+    {
+        $id = trim($this->request->getPost('id') ?? '');
+        $msg = $this->incomingModel->find($id);
+
+        if (!$msg) {
+            return $this->response->setStatusCode(404)->setJSON([
+                'status'  => 'error',
+                'message' => 'Incoming message not found.',
+            ]);
+        }
+
+        $this->incomingModel->delete($id);
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => 'Incoming message deleted.',
         ]);
     }
 }

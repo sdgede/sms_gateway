@@ -15,6 +15,8 @@ $routes->post('web/sms/send', 'Home::sendTestSms');
 $routes->post('web/sms/requeue', 'Home::requeueSms');
 $routes->post('web/sms/delete', 'Home::deleteSms');
 $routes->post('web/gateway/action', 'Home::gatewayAction');
+$routes->post('web/phone-line/delete', 'Home::deletePhoneLine');
+$routes->post('web/incoming/delete', 'Home::deleteIncoming');
 $routes->post('web/worker/run', 'Home::runWorker');
 
 // --------------------------------------------------------------------

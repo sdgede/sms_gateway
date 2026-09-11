@@ -5,6 +5,55 @@ namespace App\Libraries;
 class FcmService
 {
     /**
+     * Get Firebase FCM configuration status
+     */
+    public static function getConfigStatus(): array
+    {
+        $envFile = env('fcm.credentialsFile');
+        $possiblePaths = [
+            $envFile,
+            !empty($envFile) ? ROOTPATH . ltrim($envFile, '/') : null,
+            WRITEPATH . 'firebase/service-account.json',
+            ROOTPATH . 'writable/firebase/service-account.json',
+        ];
+
+        foreach ($possiblePaths as $p) {
+            if (!empty($p) && file_exists($p)) {
+                $json = @file_get_contents($p);
+                $creds = json_decode($json, true);
+                if ($creds && !empty($creds['project_id'])) {
+                    return [
+                        'configured' => true,
+                        'mode'       => 'HTTP_V1',
+                        'project_id' => $creds['project_id'],
+                        'client_email' => $creds['client_email'] ?? '',
+                        'file'       => basename($p),
+                    ];
+                }
+            }
+        }
+
+        $serverKey = env('fcm.serverKey', '');
+        if (!empty($serverKey)) {
+            return [
+                'configured' => true,
+                'mode'       => 'LEGACY',
+                'project_id' => null,
+                'client_email' => null,
+                'file'       => 'Server Key (Legacy)',
+            ];
+        }
+
+        return [
+            'configured' => false,
+            'mode'       => 'NONE',
+            'project_id' => null,
+            'client_email' => null,
+            'file'       => null,
+        ];
+    }
+
+    /**
      * Send data-only FCM push to trigger Android worker for a new message
      */
     public static function pushMessage(string $fcmToken, string $messageId): bool
