@@ -798,7 +798,8 @@
 <div id="toastContainer"></div>
 
 <script>
-    const BASE_URL = '<?= rtrim(base_url(), "/") ?>';
+    // Robust BASE_URL detection for root, subfolder (/sms), and ports
+    const BASE_URL = window.location.origin + window.location.pathname.replace(/\/index\.php\/?$/, '').replace(/\/+$/, '');
     let latestPairingCode = '';
 
     // Tab Switching

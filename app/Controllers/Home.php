@@ -122,7 +122,11 @@ class Home extends BaseController
      */
     public function generatePairing(): ResponseInterface
     {
-        $deviceName = trim($this->request->getPost('device_name') ?? 'Android Gateway Device');
+        $deviceName = trim($this->request->getVar('device_name') ?? '');
+        if (empty($deviceName)) {
+            $json = $this->request->getJSON(true);
+            $deviceName = $json['device_name'] ?? 'Android Gateway Device';
+        }
 
         $pairing = $this->pairingModel->generateCode($deviceName);
 
@@ -147,7 +151,11 @@ class Home extends BaseController
      */
     public function deletePairing(): ResponseInterface
     {
-        $id = (int)($this->request->getPost('id') ?? 0);
+        $id = (int)($this->request->getVar('id') ?? 0);
+        if ($id === 0) {
+            $json = $this->request->getJSON(true);
+            $id = (int)($json['id'] ?? 0);
+        }
         $pairing = $this->pairingModel->find($id);
 
         if (!$pairing) {
@@ -171,10 +179,18 @@ class Home extends BaseController
      */
     public function sendTestSms(): ResponseInterface
     {
-        $recipient = trim($this->request->getPost('recipient') ?? '');
-        $message = trim($this->request->getPost('message') ?? '');
-        $priority = (int)($this->request->getPost('priority') ?? 2);
-        $clientMessageId = trim($this->request->getPost('client_message_id') ?? '');
+        $recipient = trim($this->request->getVar('recipient') ?? '');
+        $message = trim($this->request->getVar('message') ?? '');
+        $priority = (int)($this->request->getVar('priority') ?? 2);
+        $clientMessageId = trim($this->request->getVar('client_message_id') ?? '');
+
+        if (empty($recipient) || empty($message)) {
+            $json = $this->request->getJSON(true) ?? [];
+            $recipient = trim($json['recipient'] ?? '');
+            $message = trim($json['message'] ?? '');
+            $priority = (int)($json['priority'] ?? $priority);
+            $clientMessageId = trim($json['client_message_id'] ?? $clientMessageId);
+        }
 
         if (empty($recipient) || empty($message)) {
             return $this->response->setStatusCode(422)->setJSON([
@@ -215,8 +231,14 @@ class Home extends BaseController
      */
     public function gatewayAction(): ResponseInterface
     {
-        $deviceId = trim($this->request->getPost('device_id') ?? '');
-        $action = trim($this->request->getPost('action') ?? '');
+        $deviceId = trim($this->request->getVar('device_id') ?? '');
+        $action = trim($this->request->getVar('action') ?? '');
+
+        if (empty($deviceId) || empty($action)) {
+            $json = $this->request->getJSON(true) ?? [];
+            $deviceId = trim($json['device_id'] ?? $deviceId);
+            $action = trim($json['action'] ?? $action);
+        }
 
         $gateway = $this->gatewayModel->findByDeviceId($deviceId);
         if (!$gateway) {
@@ -257,7 +279,11 @@ class Home extends BaseController
      */
     public function requeueSms(): ResponseInterface
     {
-        $jobId = trim($this->request->getPost('job_id') ?? '');
+        $jobId = trim($this->request->getVar('job_id') ?? '');
+        if (empty($jobId)) {
+            $json = $this->request->getJSON(true) ?? [];
+            $jobId = trim($json['job_id'] ?? '');
+        }
         $job = $this->jobModel->findByJobId($jobId);
 
         if (!$job) {
