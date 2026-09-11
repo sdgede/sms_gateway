@@ -298,12 +298,26 @@ class GatewayApiController extends BaseController
 
     /**
      * Atomically claim a job
-     * POST /gateway/jobs/{id}/claim
+     * POST /gateway/jobs/{id}/claim OR POST /gateway/jobs/claim (with body {"job_id": "..."})
      */
-    public function claimJob(string $jobId): ResponseInterface
+    public function claimJob(?string $jobId = null): ResponseInterface
     {
         $gateway = $this->getAuthenticatedGateway();
-        $lockTimeout = (int)($this->request->getGet('lock_seconds') ?? 60);
+        $raw = $this->extractRequestData();
+        $lockTimeout = (int)($this->request->getGet('lock_seconds') ?? $raw['lock_seconds'] ?? 60);
+
+        if (empty($jobId)) {
+            $jobId = trim((string)($raw['job_id'] ?? $raw['jobId'] ?? $raw['id'] ?? ''));
+        }
+
+        if (empty($jobId)) {
+            log_message('error', "[Gateway::claim] Missing job_id from Device '{$gateway['device_id']}'");
+            return $this->response->setStatusCode(422)->setJSON([
+                'status'  => 'error',
+                'code'    => 'MISSING_JOB_ID',
+                'message' => "Parameter 'job_id' tidak ditemukan.",
+            ]);
+        }
 
         log_message('info', "[Gateway::claim] Device '{$gateway['device_name']}' ({$gateway['device_id']}) attempting to claim Job: '{$jobId}'");
 
@@ -331,11 +345,25 @@ class GatewayApiController extends BaseController
 
     /**
      * Mark job as SENDING (dispatched to SmsManager)
-     * POST /gateway/jobs/{id}/start
+     * POST /gateway/jobs/{id}/start OR POST /gateway/jobs/start (with body {"job_id": "..."})
      */
-    public function startJob(string $jobId): ResponseInterface
+    public function startJob(?string $jobId = null): ResponseInterface
     {
         $gateway = $this->getAuthenticatedGateway();
+        $raw = $this->extractRequestData();
+
+        if (empty($jobId)) {
+            $jobId = trim((string)($raw['job_id'] ?? $raw['jobId'] ?? $raw['id'] ?? ''));
+        }
+
+        if (empty($jobId)) {
+            return $this->response->setStatusCode(422)->setJSON([
+                'status'  => 'error',
+                'code'    => 'MISSING_JOB_ID',
+                'message' => "Parameter 'job_id' tidak ditemukan.",
+            ]);
+        }
+
         log_message('info', "[Gateway::start] Device '{$gateway['device_name']}' ({$gateway['device_id']}) starting to send Job: '{$jobId}' via SmsManager");
 
         $updated = $this->jobModel->markAsSending($jobId, $gateway['device_id']);
@@ -358,13 +386,25 @@ class GatewayApiController extends BaseController
 
     /**
      * Operator Delivery / Status Report
-     * POST /gateway/jobs/{id}/report
+     * POST /gateway/jobs/{id}/report OR POST /gateway/jobs/report (with body {"job_id": "..."})
      */
-    public function reportStatus(string $jobId): ResponseInterface
+    public function reportStatus(?string $jobId = null): ResponseInterface
     {
         $gateway = $this->getAuthenticatedGateway();
         $raw = $this->extractRequestData();
         $rawBodyString = (string)$this->request->getBody();
+
+        if (empty($jobId)) {
+            $jobId = trim((string)($raw['job_id'] ?? $raw['jobId'] ?? $raw['id'] ?? ''));
+        }
+
+        if (empty($jobId)) {
+            return $this->response->setStatusCode(422)->setJSON([
+                'status'  => 'error',
+                'code'    => 'MISSING_JOB_ID',
+                'message' => "Parameter 'job_id' tidak ditemukan.",
+            ]);
+        }
 
         log_message('info', "[Gateway::report] Incoming status report for Job '{$jobId}' from Device '{$gateway['device_id']}' | Payload: {$rawBodyString}");
 

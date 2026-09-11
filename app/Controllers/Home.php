@@ -113,6 +113,30 @@ class Home extends BaseController
     }
 
     /**
+     * Web UI: Delete Unused Pairing Code
+     * POST /web/pairing/delete
+     */
+    public function deletePairing(): ResponseInterface
+    {
+        $id = (int)($this->request->getPost('id') ?? 0);
+        $pairing = $this->pairingModel->find($id);
+
+        if (!$pairing) {
+            return $this->response->setStatusCode(404)->setJSON([
+                'status'  => 'error',
+                'message' => 'Kode pairing tidak ditemukan.',
+            ]);
+        }
+
+        $this->pairingModel->delete($id);
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => "Kode pairing {$pairing['code']} berhasil dihapus.",
+        ]);
+    }
+
+    /**
      * Web UI: Send Test SMS
      * POST /web/sms/send
      */

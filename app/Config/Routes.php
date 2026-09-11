@@ -10,6 +10,7 @@ use CodeIgniter\Router\RouteCollection;
 $routes->get('/', 'Home::index');
 $routes->get('web/data', 'Home::getLiveData');
 $routes->post('web/pairing/generate', 'Home::generatePairing');
+$routes->post('web/pairing/delete', 'Home::deletePairing');
 $routes->post('web/sms/send', 'Home::sendTestSms');
 $routes->post('web/sms/requeue', 'Home::requeueSms');
 $routes->post('web/sms/delete', 'Home::deleteSms');
@@ -34,15 +35,22 @@ $routes->group('api/v1', ['filter' => 'internal_api_auth'], static function ($ro
 $routes->post('api/v1/gateway/pair', 'Api\GatewayApiController::pair');
 
 $routes->group('api/v1/gateway', ['filter' => 'gateway_auth'], static function ($routes) {
-    $routes->post('heartbeat', 'Api\GatewayApiController::heartbeat');
+    $routes->match(['get', 'post'], 'heartbeat', 'Api\GatewayApiController::heartbeat');
     $routes->get('profile', 'Api\GatewayApiController::profile');
     $routes->post('revoke', 'Api\GatewayApiController::revoke');
 
-    // SMS Job Queue operations
-    $routes->get('jobs/next', 'Api\GatewayApiController::getNextJobs');
+    // SMS Job Queue operations (Support GET & POST for next/poll)
+    $routes->match(['get', 'post'], 'jobs/next', 'Api\GatewayApiController::getNextJobs');
+    $routes->match(['get', 'post'], 'jobs/poll', 'Api\GatewayApiController::getNextJobs');
+    $routes->match(['get', 'post'], 'jobs/pending', 'Api\GatewayApiController::getNextJobs');
+
+    // Claim, Start, Report (Support both /jobs/{id}/claim and /jobs/claim)
     $routes->post('jobs/(:segment)/claim', 'Api\GatewayApiController::claimJob/$1');
+    $routes->post('jobs/claim', 'Api\GatewayApiController::claimJob');
     $routes->post('jobs/(:segment)/start', 'Api\GatewayApiController::startJob/$1');
+    $routes->post('jobs/start', 'Api\GatewayApiController::startJob');
     $routes->post('jobs/(:segment)/report', 'Api\GatewayApiController::reportStatus/$1');
+    $routes->post('jobs/report', 'Api\GatewayApiController::reportStatus');
 });
 
 // --------------------------------------------------------------------
@@ -51,12 +59,18 @@ $routes->group('api/v1/gateway', ['filter' => 'gateway_auth'], static function (
 $routes->post('gateway/pair', 'Api\GatewayApiController::pair');
 
 $routes->group('gateway', ['filter' => 'gateway_auth'], static function ($routes) {
-    $routes->post('heartbeat', 'Api\GatewayApiController::heartbeat');
+    $routes->match(['get', 'post'], 'heartbeat', 'Api\GatewayApiController::heartbeat');
     $routes->get('profile', 'Api\GatewayApiController::profile');
     $routes->post('revoke', 'Api\GatewayApiController::revoke');
 
-    $routes->get('jobs/next', 'Api\GatewayApiController::getNextJobs');
+    $routes->match(['get', 'post'], 'jobs/next', 'Api\GatewayApiController::getNextJobs');
+    $routes->match(['get', 'post'], 'jobs/poll', 'Api\GatewayApiController::getNextJobs');
+    $routes->match(['get', 'post'], 'jobs/pending', 'Api\GatewayApiController::getNextJobs');
+
     $routes->post('jobs/(:segment)/claim', 'Api\GatewayApiController::claimJob/$1');
+    $routes->post('jobs/claim', 'Api\GatewayApiController::claimJob');
     $routes->post('jobs/(:segment)/start', 'Api\GatewayApiController::startJob/$1');
+    $routes->post('jobs/start', 'Api\GatewayApiController::startJob');
     $routes->post('jobs/(:segment)/report', 'Api\GatewayApiController::reportStatus/$1');
+    $routes->post('jobs/report', 'Api\GatewayApiController::reportStatus');
 });

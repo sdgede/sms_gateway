@@ -109,6 +109,10 @@ class SmsJobModel extends Model
      */
     public function getNextAvailableJobs(int $limit = 5): array
     {
+        // Auto process any ready retries and stale claims on-the-fly
+        $this->processRetries();
+        $this->recoverStaleClaims();
+
         $now = date('Y-m-d H:i:s');
 
         return $this->where('status', self::STATUS_PENDING)

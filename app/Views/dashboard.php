@@ -500,10 +500,18 @@
                 </form>
 
                 <div id="pairingDisplay" class="pairing-display">
-                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Kode Pairing Android</div>
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Kode Pairing Android Terbaru</div>
                     <div id="pairingCodeResult" class="pairing-code-text">------</div>
                     <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px;" id="pairingExpiryNote">Aktif permanen sampai di-pairing</div>
-                    <button class="btn btn-secondary btn-sm" onclick="copyPairingCode()">📋 Salin Kode</button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="copyActivePairingCode()">📋 Salin Kode</button>
+                </div>
+
+                <!-- Active Unused Pairing Codes List -->
+                <div id="activeCodesContainer" style="margin-top: 16px; display: none;">
+                    <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">
+                        📌 Kode Pairing Aktif (Belum Digunakan)
+                    </div>
+                    <div id="activeCodesList" style="display: flex; flex-direction: column; gap: 8px;"></div>
                 </div>
             </div>
 
@@ -628,7 +636,7 @@
 
 <script>
     const BASE_URL = '<?= rtrim(base_url(), "/") ?>';
-    let activePairingCode = '';
+    let latestPairingCode = '';
 
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
@@ -653,7 +661,7 @@
     }
 
     function updateCharCount() {
-        const text = document.getElementById('messageInput').value;
+        const text = document.getElementById('messageInput')?.value || '';
         const chars = text.length;
         document.getElementById('charCount').innerText = `${chars} karakter`;
         const sms = Math.ceil(chars / 160) || 1;
@@ -691,6 +699,29 @@
 
         document.getElementById('lastUpdatedTag').innerText = `Updated ${new Date().toLocaleTimeString()}`;
 
+        // Render Active Pairing Codes
+        const activeContainer = document.getElementById('activeCodesContainer');
+        const activeList = document.getElementById('activeCodesList');
+        const unusedCodes = (data.pairing_codes || []).filter(c => !c.is_used);
+
+        if (unusedCodes.length > 0) {
+            activeContainer.style.display = 'block';
+            activeList.innerHTML = unusedCodes.map(c => `
+                <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 10px;">
+                    <div>
+                        <span style="font-family: var(--font-mono); font-weight: 700; color: #818cf8; font-size: 14px; letter-spacing: 0.1em;">${c.code}</span>
+                        <span style="font-size: 11px; color: var(--text-dim); margin-left: 6px;">(${escapeHtml(c.device_name)})</span>
+                    </div>
+                    <div style="display: flex; gap: 4px;">
+                        <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 11px;" onclick="copyCodeText('${c.code}')" title="Salin Kode">📋</button>
+                        <button class="btn btn-danger-subtle btn-sm" style="padding: 2px 8px; font-size: 11px;" onclick="handleDeletePairing(${c.id})" title="Hapus Kode">🗑️</button>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            activeContainer.style.display = 'none';
+        }
+
         // Render Gateways Table
         const gwTbody = document.getElementById('gatewaysTableBody');
         if (!data.gateways || data.gateways.length === 0) {
@@ -709,6 +740,10 @@
 
                 const battery = g.battery_level !== null ? `${g.battery_level}% ${g.is_charging ? '⚡' : ''}` : '-';
                 const signal = g.signal_strength !== null ? `${g.signal_strength}%` : '-';
+
+                const isBlocked = g.status === 'DISABLED';
+                const toggleAction = isBlocked ? 'enable' : 'disable';
+                const toggleLabel = isBlocked ? '🟢 Enable' : '⏸️ Disable';
 
                 return `
                     <tr>
@@ -730,9 +765,15 @@
                         <td>
                             <div style="font-size: 12px;">${g.last_seen_human}</div>
                         </td>
-                        <td>
-                            <button class="btn btn-danger-subtle btn-sm" onclick="handleGatewayAction('${g.device_id}', 'revoke')">
-                                Revoke
+                        <td style="white-space: nowrap;">
+                            <button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px; margin-right: 4px;" title="${toggleAction} device" onclick="handleGatewayAction('${g.device_id}', '${toggleAction}')">
+                                ${toggleLabel}
+                            </button>
+                            <button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px; margin-right: 4px; color: #fbbf24;" title="Revoke Token" onclick="handleGatewayAction('${g.device_id}', 'revoke')">
+                                🔑 Revoke
+                            </button>
+                            <button class="btn btn-danger-subtle btn-sm" style="padding: 4px 8px; font-size: 11px;" title="Hapus Device" onclick="handleGatewayAction('${g.device_id}', 'delete')">
+                                🗑️
                             </button>
                         </td>
                     </tr>
@@ -763,7 +804,7 @@
                 return `
                     <tr>
                         <td>
-                            <div class="mono-tag" style="color: var(--primary);">${escapeHtml(j.job_id)}</div>
+                            <div class="mono-tag" style="color: var(--primary); font-weight: 600;">${escapeHtml(j.job_id)}</div>
                             <div class="mono-tag">${escapeHtml(j.client_message_id || '-')}</div>
                         </td>
                         <td>
@@ -872,12 +913,10 @@
     // Generate Pairing Code Form Handler
     async function handleGeneratePairing(e) {
         e.preventDefault();
-        const deviceName = document.getElementById('deviceNameInput').value;
-        const expiryMinutes = document.getElementById('expiryMinutesInput').value;
+        const deviceName = document.getElementById('deviceNameInput')?.value || 'Android Gateway Device';
 
         const formData = new FormData();
         formData.append('device_name', deviceName);
-        formData.append('expiry_minutes', expiryMinutes);
 
         try {
             const res = await fetch(`${BASE_URL}/web/pairing/generate`, {
@@ -886,11 +925,12 @@
             });
             const result = await res.json();
             if (result.status === 'success') {
-                activePairingCode = result.data.code;
-                document.getElementById('pairingCodeResult').innerText = activePairingCode;
-                document.getElementById('pairingExpiryNote').innerText = `Berlaku s/d ${result.data.expires_at}`;
+                latestPairingCode = result.data.code;
+                document.getElementById('pairingCodeResult').innerText = latestPairingCode;
+                document.getElementById('pairingExpiryNote').innerText = 'Aktif permanen sampai di-pairing';
                 document.getElementById('pairingDisplay').style.display = 'block';
-                showToast(`Pairing code ${activePairingCode} generated!`, 'success');
+                showToast(`Pairing code ${latestPairingCode} generated!`, 'success');
+                fetchLiveData();
             } else {
                 showToast(result.message || 'Failed to generate pairing code', 'error');
             }
@@ -899,10 +939,38 @@
         }
     }
 
-    function copyPairingCode() {
-        if (!activePairingCode) return;
-        navigator.clipboard.writeText(activePairingCode);
-        showToast(`Kode ${activePairingCode} disalin ke clipboard!`, 'success');
+    function copyActivePairingCode() {
+        if (!latestPairingCode) return;
+        copyCodeText(latestPairingCode);
+    }
+
+    function copyCodeText(text) {
+        navigator.clipboard.writeText(text);
+        showToast(`Kode ${text} disalin ke clipboard!`, 'success');
+    }
+
+    // Delete Unused Pairing Code
+    async function handleDeletePairing(id) {
+        if (!confirm('Hapus kode pairing ini?')) return;
+
+        const formData = new FormData();
+        formData.append('id', id);
+
+        try {
+            const res = await fetch(`${BASE_URL}/web/pairing/delete`, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await res.json();
+            if (result.status === 'success') {
+                showToast(result.message, 'success');
+                fetchLiveData();
+            } else {
+                showToast(result.message || 'Gagal menghapus kode pairing', 'error');
+            }
+        } catch (err) {
+            showToast('Connection error: ' + err.message, 'error');
+        }
     }
 
     // Send SMS Form Handler
@@ -939,9 +1007,16 @@
         }
     }
 
-    // Gateway Action Handler (Revoke)
+    // Gateway Action Handler (Revoke / Disable / Enable / Delete)
     async function handleGatewayAction(deviceId, action) {
-        if (!confirm(`Apakah Anda yakin ingin melakukan '${action}' pada device ini?`)) return;
+        const prompts = {
+            'revoke': 'Revoke token device ini? (Device harus pairing ulang untuk terhubung kembali)',
+            'disable': 'Nonaktifkan (Disable) device ini? (Device tidak akan menerima SMS)',
+            'enable': 'Aktifkan kembali (Enable) device ini?',
+            'delete': 'Hapus device ini secara permanen dari sistem?'
+        };
+
+        if (!confirm(prompts[action] || `Lakukan aksi '${action}' pada device ini?`)) return;
 
         const formData = new FormData();
         formData.append('device_id', deviceId);
