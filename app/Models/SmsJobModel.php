@@ -90,6 +90,17 @@ class SmsJobModel extends Model
             // Non-blocking
         }
 
+        // Broadcast via FCM Push to registered Android phone line
+        try {
+            $phoneLineModel = new \App\Models\SmsPhoneLineModel();
+            $line = $phoneLineModel->getAnyActiveToken();
+            if ($line && !empty($line['fcm_token'])) {
+                \App\Libraries\FcmService::pushMessage($line['fcm_token'], $data['job_id']);
+            }
+        } catch (\Throwable $e) {
+            // Non-blocking
+        }
+
         return [
             'job'       => $data,
             'is_replay' => false,

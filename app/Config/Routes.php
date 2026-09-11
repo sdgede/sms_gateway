@@ -18,9 +18,27 @@ $routes->post('web/gateway/action', 'Home::gatewayAction');
 $routes->post('web/worker/run', 'Home::runWorker');
 
 // --------------------------------------------------------------------
+// 0. com.httpsms Contract Endpoints (/v1/...) Protected by httpsms_auth (x-api-key)
+// --------------------------------------------------------------------
+$routes->group('v1', ['filter' => 'httpsms_auth'], static function ($routes) {
+    $routes->put('phones/fcm-token', 'Api\HttpSmsController::updateFcmToken');
+    $routes->get('messages/outstanding', 'Api\HttpSmsController::getOutstandingMessage');
+    $routes->post('messages/(:segment)/events', 'Api\HttpSmsController::recordMessageEvent/$1');
+    $routes->post('heartbeats', 'Api\HttpSmsController::recordHeartbeat');
+    $routes->post('messages/receive', 'Api\HttpSmsController::receiveMessage');
+});
+
+// --------------------------------------------------------------------
 // 1. API v1 - Internal SMS Dispatch (Protected by internal_api_auth / X-API-Key)
 // --------------------------------------------------------------------
 $routes->group('api/v1', ['filter' => 'internal_api_auth'], static function ($routes) {
+    // Also alias v1 httpsms contract under api/v1
+    $routes->put('phones/fcm-token', 'Api\HttpSmsController::updateFcmToken');
+    $routes->get('messages/outstanding', 'Api\HttpSmsController::getOutstandingMessage');
+    $routes->post('messages/(:segment)/events', 'Api\HttpSmsController::recordMessageEvent/$1');
+    $routes->post('heartbeats', 'Api\HttpSmsController::recordHeartbeat');
+    $routes->post('messages/receive', 'Api\HttpSmsController::receiveMessage');
+
     $routes->post('sms/send', 'Api\SmsApiController::send');
     $routes->get('sms/status/(:segment)', 'Api\SmsApiController::status/$1');
     $routes->get('sms/statistics', 'Api\SmsApiController::statistics');

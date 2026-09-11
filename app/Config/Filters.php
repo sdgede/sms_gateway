@@ -36,6 +36,7 @@ class Filters extends BaseFilters
         'performance'   => PerformanceMetrics::class,
         'gateway_auth'  => \App\Filters\GatewayAuthFilter::class,
         'internal_api_auth' => \App\Filters\InternalApiAuthFilter::class,
+        'httpsms_auth'      => \App\Filters\HttpSmsAuthFilter::class,
     ];
 
     /**
