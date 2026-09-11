@@ -64,6 +64,9 @@ Vagrantfile
 /writable/uploads/*
 !/writable/uploads/index.html
 
+/writable/firebase/*
+!/writable/firebase/index.html
+
 /writable/debugbar/*
 !/writable/debugbar/index.html
 

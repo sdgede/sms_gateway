@@ -135,6 +135,8 @@ class GatewayApiController extends BaseController
             ?? $raw['appVersion'] 
             ?? null;
 
+        $fcmToken = trim((string)($raw['fcm_token'] ?? $raw['fcmToken'] ?? ''));
+
         // 5. Generate secure device token
         $rawToken = 'gw_tok_' . bin2hex(random_bytes(24));
         $tokenHash = SmsGatewayModel::hashToken($rawToken);
@@ -157,6 +159,14 @@ class GatewayApiController extends BaseController
             $this->gatewayModel->update($existing['id'], $gatewayData);
         } else {
             $this->gatewayModel->insert($gatewayData);
+        }
+
+        // Also register in Phone Lines if phone number and fcm token exist
+        if (!empty($fcmToken)) {
+            $phoneLineModel = new \App\Models\SmsPhoneLineModel();
+            $simLabel = $simSlot === 2 ? 'SIM2' : 'SIM1';
+            $phoneLineModel->registerLine($phoneNumber ?: $deviceId, $simLabel, $fcmToken);
+            log_message('info', "[Gateway::pair] FCM Token registered for Device '{$deviceId}' ({$simLabel})");
         }
 
         // 7. Mark pairing code used
