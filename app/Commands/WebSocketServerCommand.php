@@ -39,8 +39,15 @@ class WebSocketServerCommand extends BaseCommand
         CLI::write("  Press Ctrl+C to stop.", 'dark_gray');
         CLI::write("--------------------------------------------------", 'cyan');
 
+        $context = stream_context_create([
+            'socket' => [
+                'so_reuseport' => true,
+                'so_reuseaddr' => true,
+            ],
+        ]);
+
         // 1. Create WebSocket Server Socket
-        $this->wsSocket = stream_socket_server("tcp://{$host}:{$port}", $errno, $errstr);
+        $this->wsSocket = stream_socket_server("tcp://{$host}:{$port}", $errno, $errstr, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN, $context);
         if (!$this->wsSocket) {
             CLI::error("Failed to start WebSocket server on {$host}:{$port} - {$errstr} ({$errno})");
             return;
@@ -48,7 +55,7 @@ class WebSocketServerCommand extends BaseCommand
         stream_set_blocking($this->wsSocket, false);
 
         // 2. Create Internal IPC Socket
-        $this->ipcSocket = stream_socket_server("tcp://127.0.0.1:{$ipcPort}", $errno, $errstr);
+        $this->ipcSocket = stream_socket_server("tcp://127.0.0.1:{$ipcPort}", $errno, $errstr, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN, $context);
         if (!$this->ipcSocket) {
             CLI::error("Failed to start IPC server on 127.0.0.1:{$ipcPort} - {$errstr} ({$errno})");
             return;
