@@ -11,6 +11,8 @@ $routes->get('/', 'Home::index');
 $routes->get('web/data', 'Home::getLiveData');
 $routes->post('web/pairing/generate', 'Home::generatePairing');
 $routes->post('web/sms/send', 'Home::sendTestSms');
+$routes->post('web/sms/requeue', 'Home::requeueSms');
+$routes->post('web/sms/delete', 'Home::deleteSms');
 $routes->post('web/gateway/action', 'Home::gatewayAction');
 $routes->post('web/worker/run', 'Home::runWorker');
 

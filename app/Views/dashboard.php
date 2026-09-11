@@ -523,6 +523,13 @@
                         ✉️ Kirim Test SMS ke Queue
                     </div>
                 </div>
+
+                <div style="display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="setPreset('otp')">📱 Preset OTP</button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="setPreset('trx')">💰 Preset Transaksi</button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="setPreset('notif')">🔔 Preset Notif</button>
+                </div>
+
                 <form id="sendSmsForm" onsubmit="handleSendSms(event)">
                     <div class="form-group">
                         <label>Nomor Penerima (Recipient)</label>
@@ -606,11 +613,12 @@
                                 <th>Attempt</th>
                                 <th>Device</th>
                                 <th>Waktu</th>
+                                <th>Aksi</th>
                             </tr>
                         </thead>
                         <tbody id="jobsTableBody">
                             <tr>
-                                <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 24px;">
+                                <td colspan="8" style="text-align: center; color: var(--text-dim); padding: 24px;">
                                     Belum ada antrean SMS.
                                 </td>
                             </tr>
@@ -746,7 +754,7 @@
         if (!data.jobs || data.jobs.length === 0) {
             jobsTbody.innerHTML = `
                 <tr>
-                    <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 24px;">
+                    <td colspan="8" style="text-align: center; color: var(--text-dim); padding: 24px;">
                         Belum ada pesan SMS di antrean.
                     </td>
                 </tr>
@@ -785,9 +793,88 @@
                         <td>
                             <div style="font-size: 11px; color: var(--text-muted);">${j.created_at || '-'}</div>
                         </td>
+                        <td style="white-space: nowrap;">
+                            <button class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px; margin-right: 4px;" title="Reset ke PENDING agar langsung dikirim oleh Android" onclick="handleRequeueSms('${j.job_id}')">
+                                🚀 Kirim Ulang
+                            </button>
+                            <button class="btn btn-danger-subtle btn-sm" style="padding: 4px 8px; font-size: 11px;" title="Hapus SMS" onclick="handleDeleteSms('${j.job_id}')">
+                                🗑️
+                            </button>
+                        </td>
                     </tr>
                 `;
             }).join('');
+        }
+    }
+
+    // Set Message Presets
+    function setPreset(type) {
+        const msgInput = document.getElementById('messageInput');
+        const prioInput = document.getElementById('priorityInput');
+        const recInput = document.getElementById('recipientInput');
+
+        if (type === 'otp') {
+            const randCode = Math.floor(100000 + Math.random() * 900000);
+            msgInput.value = `Kode verifikasi OTP Anda adalah ${randCode}. Berlaku selama 5 menit. JANGAN bagikan kode ini kepada siapapun.`;
+            prioInput.value = '1';
+        } else if (type === 'trx') {
+            const randRef = 'TRX-' + Math.floor(10000 + Math.random() * 90000);
+            msgInput.value = `Transfer berhasil sebesar Rp 250.000 ke rek 1002938481 a/n Budi Santoso. Ref: ${randRef}. Terima kasih.`;
+            prioInput.value = '1';
+        } else if (type === 'notif') {
+            msgInput.value = `Pengingat: Tagihan Anda sebesar Rp 150.000 akan jatuh tempo pada 15 September 2026. Abaikan jika sudah membayar.`;
+            prioInput.value = '2';
+        }
+        if (!recInput.value) {
+            recInput.focus();
+        }
+        updateCharCount();
+        showToast('Preset pesan dimuat!', 'info');
+    }
+
+    // Requeue SMS Handler
+    async function handleRequeueSms(jobId) {
+        const formData = new FormData();
+        formData.append('job_id', jobId);
+
+        try {
+            const res = await fetch(`${BASE_URL}/web/sms/requeue`, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await res.json();
+            if (result.status === 'success') {
+                showToast(result.message, 'success');
+                fetchLiveData();
+            } else {
+                showToast(result.message || 'Gagal requeue SMS', 'error');
+            }
+        } catch (err) {
+            showToast('Connection error: ' + err.message, 'error');
+        }
+    }
+
+    // Delete SMS Handler
+    async function handleDeleteSms(jobId) {
+        if (!confirm(`Hapus SMS job ${jobId} dari antrean?`)) return;
+
+        const formData = new FormData();
+        formData.append('job_id', jobId);
+
+        try {
+            const res = await fetch(`${BASE_URL}/web/sms/delete`, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await res.json();
+            if (result.status === 'success') {
+                showToast(result.message, 'success');
+                fetchLiveData();
+            } else {
+                showToast(result.message || 'Gagal menghapus SMS', 'error');
+            }
+        } catch (err) {
+            showToast('Connection error: ' + err.message, 'error');
         }
     }
 

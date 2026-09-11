@@ -205,6 +205,72 @@ class Home extends BaseController
     }
 
     /**
+     * Web UI: Requeue / Retry SMS Job immediately (Reset to PENDING)
+     * POST /web/sms/requeue
+     */
+    public function requeueSms(): ResponseInterface
+    {
+        $jobId = trim($this->request->getPost('job_id') ?? '');
+        $job = $this->jobModel->findByJobId($jobId);
+
+        if (!$job) {
+            return $this->response->setStatusCode(404)->setJSON([
+                'status'  => 'error',
+                'message' => "SMS job '{$jobId}' tidak ditemukan.",
+            ]);
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $this->jobModel->update($job['id'], [
+            'status'             => SmsJobModel::STATUS_PENDING,
+            'available_at'       => $now,
+            'assigned_device_id' => null,
+            'claimed_at'         => null,
+            'claim_expires_at'   => null,
+            'attempt'            => 0,
+            'failed_reason'      => null,
+            'updated_at'         => $now,
+        ]);
+
+        $this->auditLogModel->log(
+            actorType: 'ADMIN',
+            actorId: 'WEB_UI',
+            action: 'SMS_JOB_REQUEUED',
+            target: $jobId
+        );
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => "Job {$jobId} berhasil di-reset ke antrean PENDING untuk dikirim ulang oleh Android.",
+        ]);
+    }
+
+    /**
+     * Web UI: Delete SMS Job
+     * POST /web/sms/delete
+     */
+    public function deleteSms(): ResponseInterface
+    {
+        $jobId = trim($this->request->getPost('job_id') ?? '');
+        $job = $this->jobModel->findByJobId($jobId);
+
+        if (!$job) {
+            return $this->response->setStatusCode(404)->setJSON([
+                'status'  => 'error',
+                'message' => "SMS job '{$jobId}' tidak ditemukan.",
+            ]);
+        }
+
+        $this->jobModel->delete($job['id']);
+        $this->reportModel->where('job_id', $jobId)->delete();
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => "Job {$jobId} berhasil dihapus dari sistem.",
+        ]);
+    }
+
+    /**
      * Web UI: Run Background Worker manually
      * POST /web/worker/run
      */
