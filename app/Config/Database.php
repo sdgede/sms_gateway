@@ -202,5 +202,15 @@ class Database extends Config
         if (ENVIRONMENT === 'testing') {
             $this->defaultGroup = 'tests';
         }
+
+        // Ensure SQLite database always resolves to an absolute path in WRITEPATH
+        // so CLI (spark) and Web Server (public/index.php) always use the exact same file
+        $driver = env('database.default.DBDriver', $this->default['DBDriver'] ?? '');
+        if ($driver === 'SQLite3') {
+            $dbName = env('database.default.database', $this->default['database'] ?: 'sms_gateway.db');
+            if ($dbName !== ':memory:' && !str_starts_with($dbName, '/')) {
+                $this->default['database'] = WRITEPATH . basename($dbName);
+            }
+        }
     }
 }
