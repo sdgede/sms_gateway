@@ -55,3 +55,17 @@ Events::on('pre_system', static function (): void {
         }
     }
 });
+
+// Configure SQLite Pragmas for High Concurrency (WAL mode & busy timeout)
+Events::on('post_controller_constructor', static function (): void {
+    try {
+        $db = \Config\Database::connect();
+        if ($db->DBDriver === 'SQLite3') {
+            $db->simpleQuery('PRAGMA journal_mode = WAL;');
+            $db->simpleQuery('PRAGMA busy_timeout = 10000;');
+            $db->simpleQuery('PRAGMA synchronous = NORMAL;');
+        }
+    } catch (\Throwable $e) {
+        // Silently continue if already connected or during CLI tests
+    }
+});

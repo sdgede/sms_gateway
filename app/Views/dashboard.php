@@ -486,7 +486,7 @@
             <div class="panel">
                 <div class="panel-header">
                     <div class="panel-title">
-                        🔑 Generate One-Time Pairing Code
+                        Generate One-Time Pairing Code
                     </div>
                 </div>
                 <form id="pairingForm" onsubmit="handleGeneratePairing(event)">
@@ -495,7 +495,7 @@
                         <input type="text" id="deviceNameInput" class="form-control" placeholder="Contoh: Android Gateway Cabang 01" value="Android Gateway Device 01" required>
                     </div>
                     <button type="submit" class="btn btn-primary" style="width: 100%;">
-                        🔑 Generate Pairing Code
+                        Generate Pairing Code
                     </button>
                 </form>
 
