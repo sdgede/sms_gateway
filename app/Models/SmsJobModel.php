@@ -83,6 +83,8 @@ class SmsJobModel extends Model
         $id = $this->insert($data);
         $data['id'] = $id;
 
+        log_message('info', "[SmsJobModel::createJob] Created SMS Job: {$jobId} to Recipient: {$recipient} (Priority: {$data['priority']})");
+
         // Broadcast to WebSocket server if running
         try {
             \App\Libraries\WebSocketBroadcaster::broadcastNewJob($data);
@@ -100,9 +102,16 @@ class SmsJobModel extends Model
                     $lines = [$anyLine];
                 }
             }
-            foreach ($lines as $line) {
-                if (!empty($line['fcm_token'])) {
-                    \App\Libraries\FcmService::pushMessage($line['fcm_token'], $data['job_id']);
+
+            if (empty($lines)) {
+                log_message('warning', "[SmsJobModel::createJob] No registered active FCM phone lines found in sms_phone_lines for Job {$jobId}. Device needs to register/pair first.");
+            } else {
+                log_message('info', "[SmsJobModel::createJob] Triggering FCM push for Job {$jobId} to " . count($lines) . " registered line(s)...");
+                foreach ($lines as $line) {
+                    if (!empty($line['fcm_token'])) {
+                        log_message('info', "[SmsJobModel::createJob] Pushing to line {$line['phone_number']} (FCM: " . substr($line['fcm_token'], 0, 20) . "...)");
+                        \App\Libraries\FcmService::pushMessage($line['fcm_token'], $data['job_id']);
+                    }
                 }
             }
         } catch (\Throwable $e) {

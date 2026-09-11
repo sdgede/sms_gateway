@@ -305,6 +305,27 @@ class Home extends BaseController
             'updated_at'         => $now,
         ]);
 
+        log_message('info', "[Home::requeueSms] Job {$jobId} reset to PENDING. Triggering FCM push...");
+
+        // Broadcast via FCM Push to registered Android phone line(s)
+        try {
+            $lines = $this->phoneLineModel->where('is_active', 1)->where('fcm_token IS NOT NULL')->findAll();
+            if (empty($lines)) {
+                $anyLine = $this->phoneLineModel->getAnyActiveToken();
+                if ($anyLine) {
+                    $lines = [$anyLine];
+                }
+            }
+            foreach ($lines as $line) {
+                if (!empty($line['fcm_token'])) {
+                    log_message('info', "[Home::requeueSms] Re-pushing Job {$jobId} to line {$line['phone_number']} (FCM: " . substr($line['fcm_token'], 0, 20) . "...)");
+                    \App\Libraries\FcmService::pushMessage($line['fcm_token'], $jobId);
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('error', '[Home::requeueSms] FCM push failed: ' . $e->getMessage());
+        }
+
         $this->auditLogModel->log(
             actorType: 'ADMIN',
             actorId: 'WEB_UI',
@@ -314,7 +335,7 @@ class Home extends BaseController
 
         return $this->response->setJSON([
             'status'  => 'success',
-            'message' => "Job {$jobId} berhasil di-reset ke antrean PENDING untuk dikirim ulang oleh Android.",
+            'message' => "Job {$jobId} berhasil di-reset ke antrean PENDING dan sinyal FCM dikirimkan ke Android.",
         ]);
     }
 

@@ -80,13 +80,14 @@ class HttpSmsController extends BaseController
         $raw = $this->extractRequestData();
         $rawBodyString = (string)$this->request->getBody();
 
-        log_message('info', "[HttpSms::updateFcmToken] Incoming request: {$rawBodyString}");
+        log_message('info', "[HttpSms::updateFcmToken] Incoming request from IP {$this->request->getIPAddress()}: {$rawBodyString}");
 
         $fcmToken = trim((string)($raw['fcm_token'] ?? ''));
         $phoneNumber = trim((string)($raw['phone_number'] ?? ''));
         $sim = 'SIM1'; // Strict Single SIM Mode
 
         if (empty($fcmToken) || empty($phoneNumber)) {
+            log_message('error', "[HttpSms::updateFcmToken] Validation failed: missing fcm_token or phone_number");
             return $this->response->setStatusCode(422)->setJSON([
                 'data'    => null,
                 'message' => 'The fcm_token and phone_number fields are required.',
@@ -114,6 +115,8 @@ class HttpSmsController extends BaseController
             $this->gatewayModel->insert($gwData);
         }
 
+        log_message('info', "[HttpSms::updateFcmToken] SUCCESS: Registered SIM Line {$phoneNumber} (SIM1) with FCM Token (" . substr($fcmToken, 0, 20) . "...) for User {$userId}");
+
         $this->auditLogModel->log(
             actorType: 'ANDROID_APP',
             actorId: $phoneNumber,
@@ -140,7 +143,10 @@ class HttpSmsController extends BaseController
     {
         $messageId = trim((string)($this->request->getGet('message_id') ?? ''));
 
+        log_message('info', "[HttpSms::getOutstandingMessage] Request from IP {$this->request->getIPAddress()} for message_id: '{$messageId}'");
+
         if (empty($messageId)) {
+            log_message('error', "[HttpSms::getOutstandingMessage] Missing message_id parameter");
             return $this->response->setStatusCode(400)->setJSON([
                 'data'    => null,
                 'message' => 'Missing message_id parameter',
@@ -150,6 +156,7 @@ class HttpSmsController extends BaseController
 
         $job = $this->jobModel->findByIdOrClientId($messageId);
         if (!$job) {
+            log_message('warning', "[HttpSms::getOutstandingMessage] Message not found for id: '{$messageId}'");
             return $this->response->setStatusCode(404)->setJSON([
                 'data'    => null,
                 'message' => 'Message not found',
@@ -183,6 +190,8 @@ class HttpSmsController extends BaseController
             'attachments'         => [],
         ];
 
+        log_message('info', "[HttpSms::getOutstandingMessage] Dispatched message payload to mobile: ID {$job['job_id']} -> Recipient: {$job['recipient']} (Content: " . substr($job['message'], 0, 30) . "...)");
+
         return $this->response->setStatusCode(200)->setJSON([
             'data'    => $responseMessage,
             'message' => 'ok',
@@ -199,7 +208,7 @@ class HttpSmsController extends BaseController
         $raw = $this->extractRequestData();
         $rawBodyString = (string)$this->request->getBody();
 
-        log_message('info', "[HttpSms::recordMessageEvent] Message {$messageId} event: {$rawBodyString}");
+        log_message('info', "[HttpSms::recordMessageEvent] Message {$messageId} event payload from IP {$this->request->getIPAddress()}: {$rawBodyString}");
 
         $eventName = strtoupper(trim((string)($raw['event_name'] ?? '')));
         $reason = $raw['reason'] ?? null;
@@ -207,6 +216,7 @@ class HttpSmsController extends BaseController
 
         $job = $this->jobModel->findByIdOrClientId($messageId);
         if (!$job) {
+            log_message('notice', "[HttpSms::recordMessageEvent] Message {$messageId} not in DB (already deleted or archived). Returning 200 OK.");
             // Per contract: 404 is considered success by app (message already deleted/done)
             return $this->response->setStatusCode(200)->setJSON([
                 'data'    => null,
@@ -222,18 +232,21 @@ class HttpSmsController extends BaseController
                 'sent_at'    => $now,
                 'updated_at' => $now,
             ]);
+            log_message('info', "[HttpSms::recordMessageEvent] Job {$job['job_id']} updated to STATUS_SENT");
         } elseif ($eventName === 'DELIVERED') {
             $this->jobModel->update($job['id'], [
                 'status'       => SmsJobModel::STATUS_DELIVERED,
                 'delivered_at' => $now,
                 'updated_at'   => $now,
             ]);
+            log_message('info', "[HttpSms::recordMessageEvent] Job {$job['job_id']} updated to STATUS_DELIVERED");
         } elseif ($eventName === 'FAILED') {
             $this->jobModel->update($job['id'], [
                 'status'        => SmsJobModel::STATUS_FAILED,
                 'failed_reason' => $reason ?? 'Generic failure',
                 'updated_at'    => $now,
             ]);
+            log_message('warning', "[HttpSms::recordMessageEvent] Job {$job['job_id']} updated to STATUS_FAILED (Reason: {$reason})");
         }
 
         // Record Delivery Report
@@ -261,10 +274,16 @@ class HttpSmsController extends BaseController
     public function recordHeartbeat(): ResponseInterface
     {
         $raw = $this->extractRequestData();
+        $rawBodyString = (string)$this->request->getBody();
         $deviceId = trim((string)($raw['device_id'] ?? 'default_android_device'));
 
         $phoneNumbers = $raw['phone_numbers'] ?? [];
         $primaryPhone = !empty($phoneNumbers[0]) ? $phoneNumbers[0] : null;
+        $battery = $raw['battery_level'] ?? '-';
+        $charging = !empty($raw['is_charging']) ? 'Yes' : 'No';
+        $carrier = $raw['sim_carrier'] ?? 'Unknown';
+
+        log_message('info', "[HttpSms::recordHeartbeat] Device '{$deviceId}' Heartbeat from IP {$this->request->getIPAddress()} | Phone: {$primaryPhone} | Carrier: {$carrier} | Battery: {$battery}% (Charging: {$charging})");
 
         $existing = $this->gatewayModel->findByDeviceId($deviceId);
         $gwData = [

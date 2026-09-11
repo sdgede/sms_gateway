@@ -119,13 +119,13 @@ class FcmService
         $json = @file_get_contents($credentialsPath);
         $creds = json_decode($json, true);
         if (!$creds || empty($creds['client_email']) || empty($creds['private_key']) || empty($creds['project_id'])) {
-            log_message('error', '[FCM HTTP v1] Invalid service-account.json format.');
+            log_message('error', "[FCM HTTP v1] Invalid service-account.json format at {$credentialsPath}.");
             return false;
         }
 
         $accessToken = self::getGoogleOAuthToken($creds);
         if (!$accessToken) {
-            log_message('error', '[FCM HTTP v1] Failed to generate Google OAuth2 token.');
+            log_message('error', '[FCM HTTP v1] Failed to generate Google OAuth2 token using private key.');
             return false;
         }
 
@@ -150,15 +150,25 @@ class FcmService
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
-        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 8);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
         curl_close($ch);
 
-        log_message('info', "[FCM HTTP v1] Dispatched to {$fcmToken} | HTTP Code: {$httpCode} | Response: {$response}");
+        if (!empty($curlError)) {
+            log_message('error', "[FCM HTTP v1] Curl error to {$fcmToken}: {$curlError}");
+            return false;
+        }
 
-        return $httpCode >= 200 && $httpCode < 300;
+        if ($httpCode >= 200 && $httpCode < 300) {
+            log_message('info', "[FCM HTTP v1] SUCCESS push to token (" . substr($fcmToken, 0, 20) . "...) | Code: {$httpCode} | Payload: " . json_encode($stringData));
+            return true;
+        }
+
+        log_message('error', "[FCM HTTP v1] FAILED push to token (" . substr($fcmToken, 0, 20) . "...) | HTTP Code: {$httpCode} | Response: {$response}");
+        return false;
     }
 
     /**
@@ -183,15 +193,25 @@ class FcmService
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 8);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
         curl_close($ch);
 
-        log_message('info', "[FCM Legacy] Dispatched to {$fcmToken} | HTTP Code: {$httpCode} | Response: {$response}");
+        if (!empty($curlError)) {
+            log_message('error', "[FCM Legacy] Curl error to {$fcmToken}: {$curlError}");
+            return false;
+        }
 
-        return $httpCode === 200;
+        if ($httpCode === 200) {
+            log_message('info', "[FCM Legacy] SUCCESS push to token (" . substr($fcmToken, 0, 20) . "...) | Response: {$response}");
+            return true;
+        }
+
+        log_message('error', "[FCM Legacy] FAILED push to token (" . substr($fcmToken, 0, 20) . "...) | HTTP Code: {$httpCode} | Response: {$response}");
+        return false;
     }
 
     /**
@@ -213,6 +233,7 @@ class FcmService
         $signature = '';
         $dataToSign = $header . '.' . $claim;
         if (!openssl_sign($dataToSign, $signature, $creds['private_key'], OPENSSL_ALGO_SHA256)) {
+            log_message('error', '[FCM OAuth2] openssl_sign failed. Please check private_key in service-account.json.');
             return null;
         }
 
@@ -225,12 +246,24 @@ class FcmService
             'assertion'  => $jwt,
         ]));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 8);
 
         $res = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
         curl_close($ch);
 
+        if (!empty($curlError)) {
+            log_message('error', "[FCM OAuth2] Token request curl error: {$curlError}");
+            return null;
+        }
+
         $tokenData = json_decode($res, true);
+        if (empty($tokenData['access_token'])) {
+            log_message('error', "[FCM OAuth2] Failed to get access_token. HTTP {$httpCode}: {$res}");
+            return null;
+        }
+
         return $tokenData['access_token'] ?? null;
     }
 }
