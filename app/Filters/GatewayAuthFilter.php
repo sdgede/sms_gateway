@@ -13,6 +13,7 @@ class GatewayAuthFilter implements FilterInterface
     {
         $authHeader = $request->getHeaderLine('Authorization');
         if (empty($authHeader) || !preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
+            log_message('warning', '[GatewayAuth] Missing or invalid Authorization header from IP: ' . $request->getIPAddress() . ' | Header: ' . substr($authHeader, 0, 30));
             $response = service('response');
             $response->setStatusCode(401);
             $response->setJSON([
@@ -28,6 +29,7 @@ class GatewayAuthFilter implements FilterInterface
         $gateway = $gatewayModel->findByToken($plainToken);
 
         if (!$gateway) {
+            log_message('warning', '[GatewayAuth] Invalid device token: ' . substr($plainToken, 0, 15) . '... from IP: ' . $request->getIPAddress());
             $response = service('response');
             $response->setStatusCode(401);
             $response->setJSON([

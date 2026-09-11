@@ -63,6 +63,10 @@ class GatewayApiController extends BaseController
     public function pair(): ResponseInterface
     {
         $raw = $this->extractRequestData();
+        $rawBodyString = (string)$this->request->getBody();
+        $contentType = $this->request->getHeaderLine('Content-Type');
+
+        log_message('info', "[Gateway::pair] Incoming request from IP: " . $this->request->getIPAddress() . " | Content-Type: {$contentType} | Raw Body: {$rawBodyString}");
 
         // Support both snake_case and camelCase field names from Mobile
         $json = [
@@ -81,12 +85,19 @@ class GatewayApiController extends BaseController
         ];
 
         if (!$this->validateData($json, $rules)) {
+            $errors = $this->validator->getErrors();
+            log_message('error', "[Gateway::pair] 422 Validation Error: " . json_encode($errors) . " | Parsed data: " . json_encode($json) . " | Raw: {$rawBodyString}");
+
             return $this->response->setStatusCode(422)->setJSON([
                 'status'  => 'error',
                 'code'    => 'VALIDATION_FAILED',
-                'message' => 'Missing pairing_code or device_id in request body.',
-                'errors'  => $this->validator->getErrors(),
-                'received_payload' => $raw,
+                'message' => 'Validation failed: ' . implode(', ', $errors),
+                'errors'  => $errors,
+                'debug'   => [
+                    'received_raw_body' => $rawBodyString,
+                    'parsed_fields'     => $json,
+                    'content_type'      => $contentType,
+                ],
             ]);
         }
 
@@ -96,10 +107,12 @@ class GatewayApiController extends BaseController
         // 1. Validate pairing code
         $validPairing = $this->pairingModel->validateCode($pairingCode);
         if (!$validPairing) {
+            log_message('error', "[Gateway::pair] Invalid/expired code: '{$pairingCode}' for device '{$deviceId}'");
+
             return $this->response->setStatusCode(400)->setJSON([
                 'status'  => 'error',
                 'code'    => 'INVALID_OR_EXPIRED_CODE',
-                'message' => 'Pairing code is invalid, already used, or expired.',
+                'message' => "Pairing code '{$pairingCode}' is invalid, already used, or expired.",
             ]);
         }
 
