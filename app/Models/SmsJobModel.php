@@ -90,15 +90,23 @@ class SmsJobModel extends Model
             // Non-blocking
         }
 
-        // Broadcast via FCM Push to registered Android phone line
+        // Broadcast via FCM Push to registered Android phone line(s)
         try {
             $phoneLineModel = new \App\Models\SmsPhoneLineModel();
-            $line = $phoneLineModel->getAnyActiveToken();
-            if ($line && !empty($line['fcm_token'])) {
-                \App\Libraries\FcmService::pushMessage($line['fcm_token'], $data['job_id']);
+            $lines = $phoneLineModel->where('is_active', 1)->where('fcm_token IS NOT NULL')->findAll();
+            if (empty($lines)) {
+                $anyLine = $phoneLineModel->getAnyActiveToken();
+                if ($anyLine) {
+                    $lines = [$anyLine];
+                }
+            }
+            foreach ($lines as $line) {
+                if (!empty($line['fcm_token'])) {
+                    \App\Libraries\FcmService::pushMessage($line['fcm_token'], $data['job_id']);
+                }
             }
         } catch (\Throwable $e) {
-            // Non-blocking
+            log_message('error', '[SmsJobModel] FCM push failed: ' . $e->getMessage());
         }
 
         return [

@@ -60,6 +60,8 @@ class FcmService
     {
         return self::sendDataNotification($fcmToken, [
             'KEY_MESSAGE_ID' => $messageId,
+            'message_id'     => $messageId,
+            'id'             => $messageId,
         ]);
     }
 
