@@ -297,6 +297,75 @@ class GatewayApiController extends BaseController
     }
 
     /**
+     * Real-Time Server-Sent Events (SSE) Stream for Instant SMS Dispatch
+     * GET /gateway/jobs/stream
+     */
+    public function streamJobs()
+    {
+        $gateway = $this->getAuthenticatedGateway();
+
+        // Prepare output environment for real-time streaming
+        @set_time_limit(0);
+        @ini_set('zlib.output_compression', '0');
+        @ini_set('implicit_flush', '1');
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+
+        header('Content-Type: text/event-stream');
+        header('Cache-Control: no-cache, no-transform');
+        header('Connection: keep-alive');
+        header('X-Accel-Buffering: no');
+
+        log_message('info', "[Gateway::jobs/stream] Device '{$gateway['device_name']}' ({$gateway['device_id']}) CONNECTED to Real-Time Push Stream");
+
+        // Initial connection packet
+        echo "event: connected\n";
+        echo 'data: ' . json_encode([
+            'status'      => 'ONLINE',
+            'device_id'   => $gateway['device_id'],
+            'device_name' => $gateway['device_name'],
+            'server_time' => date('Y-m-d H:i:s'),
+        ]) . "\n\n";
+        @flush();
+
+        $startTime = time();
+        $lastPing = time();
+        $maxStreamDuration = 120; // 2 minutes cycle, client will auto-reconnect cleanly
+
+        while (time() - $startTime < $maxStreamDuration) {
+            if (connection_aborted()) {
+                break;
+            }
+
+            // Check if there are ready pending jobs
+            $jobs = $this->jobModel->getNextAvailableJobs(1);
+            if (!empty($jobs)) {
+                $job = $jobs[0];
+                log_message('info', "[Gateway::jobs/stream] PUSHING instant job {$job['job_id']} to Device '{$gateway['device_name']}'");
+
+                echo "event: new_sms_job\n";
+                echo 'data: ' . json_encode($job) . "\n\n";
+                @flush();
+
+                sleep(1);
+            }
+
+            // Heartbeat Ping every 15s
+            if (time() - $lastPing >= 15) {
+                $lastPing = time();
+                echo "event: ping\n";
+                echo 'data: ' . json_encode(['time' => date('Y-m-d H:i:s')]) . "\n\n";
+                @flush();
+            }
+
+            usleep(500000); // 500ms check interval
+        }
+
+        exit;
+    }
+
+    /**
      * Atomically claim a job
      * POST /gateway/jobs/{id}/claim OR POST /gateway/jobs/claim (with body {"job_id": "..."})
      */

@@ -39,7 +39,8 @@ $routes->group('api/v1/gateway', ['filter' => 'gateway_auth'], static function (
     $routes->get('profile', 'Api\GatewayApiController::profile');
     $routes->post('revoke', 'Api\GatewayApiController::revoke');
 
-    // SMS Job Queue operations (Support GET & POST for next/poll)
+    // SMS Job Queue operations (Support GET & POST for next/poll & real-time stream)
+    $routes->get('jobs/stream', 'Api\GatewayApiController::streamJobs');
     $routes->match(['get', 'post'], 'jobs/next', 'Api\GatewayApiController::getNextJobs');
     $routes->match(['get', 'post'], 'jobs/poll', 'Api\GatewayApiController::getNextJobs');
     $routes->match(['get', 'post'], 'jobs/pending', 'Api\GatewayApiController::getNextJobs');
@@ -63,6 +64,7 @@ $routes->group('gateway', ['filter' => 'gateway_auth'], static function ($routes
     $routes->get('profile', 'Api\GatewayApiController::profile');
     $routes->post('revoke', 'Api\GatewayApiController::revoke');
 
+    $routes->get('jobs/stream', 'Api\GatewayApiController::streamJobs');
     $routes->match(['get', 'post'], 'jobs/next', 'Api\GatewayApiController::getNextJobs');
     $routes->match(['get', 'post'], 'jobs/poll', 'Api\GatewayApiController::getNextJobs');
     $routes->match(['get', 'post'], 'jobs/pending', 'Api\GatewayApiController::getNextJobs');

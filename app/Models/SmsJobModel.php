@@ -83,6 +83,13 @@ class SmsJobModel extends Model
         $id = $this->insert($data);
         $data['id'] = $id;
 
+        // Broadcast to WebSocket server if running
+        try {
+            \App\Libraries\WebSocketBroadcaster::broadcastNewJob($data);
+        } catch (\Throwable $e) {
+            // Non-blocking
+        }
+
         return [
             'job'       => $data,
             'is_replay' => false,
