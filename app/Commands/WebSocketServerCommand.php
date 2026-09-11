@@ -189,14 +189,35 @@ class WebSocketServerCommand extends BaseCommand
         $gwName = $gateway ? "'{$gateway['device_name']}' ({$gateway['device_id']})" : "Anonymous / Dashboard Observer";
         CLI::write("[WS] Handshake SUCCESS for Client ID {$id} | Device: {$gwName}", 'green');
 
+        if ($gateway) {
+            $this->gatewayModel->recordHeartbeat($gateway['device_id'], []);
+        }
+
         // Send Welcome Packet
         $welcome = json_encode([
-            'event'   => 'connected',
-            'message' => 'Connected to SMS Gateway WebSocket',
-            'device'  => $gateway ? $gateway['device_name'] : null,
-            'time'    => date('Y-m-d H:i:s'),
+            'event'       => 'connected',
+            'status'      => 'ONLINE',
+            'message'     => 'Connected to SMS Gateway RFC 6455 WebSocket',
+            'device_id'   => $gateway ? $gateway['device_id'] : null,
+            'device_name' => $gateway ? $gateway['device_name'] : null,
+            'server_time' => date('Y-m-d H:i:s'),
         ]);
         @fwrite($client['socket'], $this->encodeFrame($welcome));
+
+        // Immediately push any pending jobs in queue
+        if ($gateway) {
+            $jobModel = new \App\Models\SmsJobModel();
+            $pendingJobs = $jobModel->getNextAvailableJobs(5);
+            foreach ($pendingJobs as $pj) {
+                CLI::write("[WS] Pushing existing pending job {$pj['job_id']} to newly connected device {$gwName}", 'cyan');
+                $jobFrame = $this->encodeFrame(json_encode([
+                    'event'     => 'new_sms_job',
+                    'timestamp' => date('Y-m-d H:i:s'),
+                    'data'      => $pj,
+                ]));
+                @fwrite($client['socket'], $jobFrame);
+            }
+        }
     }
 
     /**
@@ -230,11 +251,77 @@ class WebSocketServerCommand extends BaseCommand
         if ($opcode === 1 && !empty($payload)) {
             $json = json_decode($payload, true);
             if (is_array($json)) {
-                $event = $json['event'] ?? 'unknown';
-                CLI::write("[WS] Received event '{$event}' from Client {$id}", 'light_cyan');
+                $action = $json['action'] ?? $json['event'] ?? 'unknown';
+                $gateway = $this->clients[$id]['gateway'] ?? null;
+                CLI::write("[WS] Received message/action '{$action}' from Client {$id}", 'light_cyan');
 
-                if ($event === 'ping') {
-                    $ack = json_encode(['event' => 'pong', 'time' => date('Y-m-d H:i:s')]);
+                $jobModel = new \App\Models\SmsJobModel();
+                $reportModel = new \App\Models\SmsDeliveryReportModel();
+
+                // 1. Ping / Heartbeat
+                if ($action === 'ping' || $action === 'heartbeat') {
+                    if ($gateway) {
+                        $this->gatewayModel->recordHeartbeat($gateway['device_id'], $json);
+                    }
+                    $ack = json_encode([
+                        'event'       => 'heartbeat_ack',
+                        'status'      => 'ONLINE',
+                        'server_time' => date('Y-m-d H:i:s'),
+                    ]);
+                    @fwrite($this->clients[$id]['socket'], $this->encodeFrame($ack));
+                }
+
+                // 2. Claim Job over WebSocket
+                elseif ($action === 'claim' && !empty($json['job_id']) && $gateway) {
+                    $jobId = $json['job_id'];
+                    $lockSecs = (int)($json['lock_seconds'] ?? 60);
+                    $claimed = $jobModel->claimJob($jobId, $gateway['device_id'], $lockSecs);
+                    $response = json_encode([
+                        'event'   => 'claim_result',
+                        'job_id'  => $jobId,
+                        'success' => $claimed,
+                        'message' => $claimed ? 'Job claimed successfully' : 'Claim failed / already claimed',
+                    ]);
+                    @fwrite($this->clients[$id]['socket'], $this->encodeFrame($response));
+                }
+
+                // 3. Mark Sending over WebSocket
+                elseif ($action === 'start' && !empty($json['job_id']) && $gateway) {
+                    $jobId = $json['job_id'];
+                    $jobModel->markAsSending($jobId, $gateway['device_id']);
+                }
+
+                // 4. Report Delivery over WebSocket
+                elseif ($action === 'report' && !empty($json['job_id']) && $gateway) {
+                    $jobId = $json['job_id'];
+                    $status = strtoupper(trim((string)($json['status'] ?? 'SENT')));
+                    $statusCode = $json['operator_status_code'] ?? null;
+                    $statusMsg = $json['operator_status_message'] ?? null;
+
+                    $reportModel->recordReport([
+                        'job_id'                  => $jobId,
+                        'device_id'               => $gateway['device_id'],
+                        'status'                  => $status,
+                        'operator_status_code'    => $statusCode,
+                        'operator_status_message' => $statusMsg,
+                        'reported_at'             => date('Y-m-d H:i:s'),
+                    ]);
+
+                    if ($status === 'SENT') {
+                        $jobModel->markAsSent($jobId, $gateway['device_id']);
+                    } elseif ($status === 'DELIVERED') {
+                        $jobModel->markAsDelivered($jobId, $gateway['device_id']);
+                    } elseif ($status === 'FAILED') {
+                        $isRecoverable = isset($json['is_recoverable']) ? (bool)$json['is_recoverable'] : true;
+                        $jobModel->markAsFailed($jobId, $gateway['device_id'], $statusMsg ?? 'Failed', $isRecoverable);
+                    }
+
+                    $ack = json_encode([
+                        'event'   => 'report_ack',
+                        'job_id'  => $jobId,
+                        'status'  => $status,
+                        'success' => true,
+                    ]);
                     @fwrite($this->clients[$id]['socket'], $this->encodeFrame($ack));
                 }
             }

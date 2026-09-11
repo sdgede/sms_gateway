@@ -1,212 +1,315 @@
-# 🚀 Panduan Real-Time WebSocket & Event Stream Android SMS Gateway
+# 🚀 Panduan Native WebSocket Android SMS Gateway
 
-Dokumen ini adalah panduan lengkap untuk tim Android mengintegrasikan **Instant Push Dispatch** sehingga HP Android menerima perintah pengiriman SMS secara **real-time** tanpa jeda polling.
-
----
-
-## 📡 2 Pilihan Koneksi Real-Time
-
-| Metode | URL Endpoint | Port | Keterangan |
-| :--- | :--- | :--- | :--- |
-| **1. SSE Stream (Disarankan)** | `https://secureapi.pandemenulis.com/sms/api/v1/gateway/jobs/stream` | `443 (HTTPS)` | ✅ Berjalan di port HTTPS normal, sangat stabil di cPanel/Hostinger. |
-| **2. Native WebSocket** | `ws://secureapi.pandemenulis.com:8085` | `8085 (TCP)` | ✅ Menggunakan RFC 6455 daemon (`php spark ws:serve`). |
+Dokumen ini adalah panduan lengkap untuk tim pengembang aplikasi Android untuk mengintegrasikan **Native WebSocket (RFC 6455)** secara *real-time*, dua arah (*bi-directional*), dan instan tanpa jeda polling.
 
 ---
 
-## 📱 Implementasi 1: Real-Time SSE Stream (Sangat Direkomendasikan)
+## 📡 Koneksi Native WebSocket
 
-Gunakan library resmi `okhttp-sse` dari Square.
+- **WebSocket URL**: `ws://secureapi.pandemenulis.com:8085?token=DEVICE_TOKEN`
+- **Alternatif Header**: `Authorization: Bearer DEVICE_TOKEN`
+- **Protokol**: RFC 6455 Standard Text Frame (JSON)
 
-### 1. Tambahkan Dependency di `build.gradle (app)`:
+---
+
+## 🛠️ 1. Setup Dependency di Android
+
+Tambahkan library `OkHttp` di `app/build.gradle`:
 ```groovy
 dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
 }
 ```
+Dan pastikan permission di `AndroidManifest.xml`:
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.SEND_SMS" />
+<uses-permission android:name="android.permission.READ_PHONE_STATE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+```
 
-### 2. Kode Kotlin Android (Foreground Service / Worker):
+---
+
+## 📱 2. Kode Lengkap Android (Kotlin Foreground Service)
+
+Berikut adalah implementasi lengkap Foreground Service dengan auto-reconnect, pengiriman SMS native, dan pelaporan status instan:
+
 ```kotlin
 package com.example.smsgateway
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.os.Build
 import android.os.IBinder
 import android.telephony.SmsManager
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.sse.EventSource
-import okhttp3.sse.EventSourceListener
-import okhttp3.sse.EventSources
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-class SmsGatewaySseService : Service() {
+class SmsGatewayWebSocketService : Service() {
 
-    private val BASE_URL = "https://secureapi.pandemenulis.com/sms/api/v1/gateway"
-    private val DEVICE_TOKEN = "gw_tok_PASTE_TOKEN_ANDA_DI_SINI"
+    private val TAG = "SMS_GATEWAY_WS"
+    
+    // Ganti dengan domain server dan token perangkat hasil pairing
+    private val WS_HOST = "ws://secureapi.pandemenulis.com:8085"
+    private val DEVICE_TOKEN = "gw_tok_PASTE_TOKEN_PERANGKAT_ANDA"
 
     private lateinit var okHttpClient: OkHttpClient
-    private var eventSource: EventSource? = null
+    private var webSocket: WebSocket? = null
+    private var isServiceRunning = true
 
     override fun onCreate() {
         super.onCreate()
+        startForegroundNotification()
+
         okHttpClient = OkHttpClient.Builder()
-            .readTimeout(0, TimeUnit.MILLISECONDS) // 0 untuk persistent stream
-            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(0, TimeUnit.MILLISECONDS) // 0 = persistent socket connection
+            .pingInterval(25, TimeUnit.SECONDS)   // Ping otomatis setiap 25 detik
+            .connectTimeout(10, TimeUnit.SECONDS)
             .build()
 
-        startEventStream()
+        connectWebSocket()
     }
 
-    private fun startEventStream() {
+    private fun connectWebSocket() {
+        if (!isServiceRunning) return
+
+        val wsUrl = "$WS_HOST?token=$DEVICE_TOKEN"
         val request = Request.Builder()
-            .url("$BASE_URL/jobs/stream")
+            .url(wsUrl)
             .header("Authorization", "Bearer $DEVICE_TOKEN")
             .build()
 
-        val factory = EventSources.createFactory(okHttpClient)
-        eventSource = factory.newEventSource(request, object : EventSourceListener() {
-            override fun onOpen(eventSource: EventSource, response: Response) {
-                Log.d("SMS_STREAM", "🟢 Terhubung ke Real-Time Stream Server")
+        Log.d(TAG, "Menghubungkan ke WebSocket: $wsUrl")
+
+        webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(ws: WebSocket, response: Response) {
+                Log.d(TAG, "🟢 TERHUBUNG KE WEBSOCKET SERVER!")
+                // Kirim info baterai awal
+                sendHeartbeat(85, 90, false)
             }
 
-            override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
-                Log.d("SMS_STREAM", "📩 Event masuk: type=$type | data=$data")
+            override fun onMessage(ws: WebSocket, text: String) {
+                Log.d(TAG, "📩 Pesan masuk dari Server: $text")
+                try {
+                    val json = JSONObject(text)
+                    val event = json.optString("event")
 
-                if (type == "new_sms_job") {
-                    val json = JSONObject(data)
-                    val jobId = json.getString("job_id")
-                    val recipient = json.getString("recipient")
-                    val message = json.getString("message")
-
-                    // 1. Klaim Job & Kirim SMS
-                    processAndSendSms(jobId, recipient, message)
+                    when (event) {
+                        "new_sms_job" -> {
+                            // Event Job SMS Baru diterima dari server
+                            val jobData = json.getJSONObject("data")
+                            handleNewSmsJob(jobData)
+                        }
+                        "claim_result" -> {
+                            val jobId = json.optString("job_id")
+                            val success = json.optBoolean("success")
+                            Log.d(TAG, "Claim Result untuk $jobId: $success")
+                        }
+                        "heartbeat_ack" -> {
+                            Log.d(TAG, "Heartbeat berhasil diterima server")
+                        }
+                        "connected" -> {
+                            Log.d(TAG, "Status: ${json.optString("message")}")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Gagal memproses pesan JSON: ${e.message}")
                 }
             }
 
-            override fun onClosed(eventSource: EventSource) {
-                Log.w("SMS_STREAM", "🟡 Stream ditutup, mencoba reconnect...")
-                reconnect()
+            override fun onClosing(ws: WebSocket, code: Int, reason: String) {
+                Log.w(TAG, "🟡 WebSocket sedang ditutup: $reason")
             }
 
-            override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
-                Log.e("SMS_STREAM", "🔴 Stream Error: ${t?.message}. Reconnecting in 3s...")
-                reconnect()
+            override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                Log.w(TAG, "🔴 WebSocket terputus. Mencoba reconnect dalam 3 detik...")
+                scheduleReconnect()
+            }
+
+            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                Log.e(TAG, "❌ WebSocket Error: ${t.message}. Reconnecting...")
+                scheduleReconnect()
             }
         })
     }
 
-    private fun reconnect() {
-        Thread.sleep(3000)
-        startEventStream()
+    private fun scheduleReconnect() {
+        if (!isServiceRunning) return
+        Thread {
+            Thread.sleep(3000)
+            connectWebSocket()
+        }.start()
     }
 
-    private fun processAndSendSms(jobId: String, recipient: String, message: String) {
-        // Step A: Claim Job
-        val claimReq = Request.Builder()
-            .url("$BASE_URL/jobs/$jobId/claim")
-            .header("Authorization", "Bearer $DEVICE_TOKEN")
-            .post("{}".toRequestBody("application/json".toMediaType()))
-            .build()
+    /**
+     * Memproses dan mengeksekusi Job SMS dari Server
+     */
+    private fun handleNewSmsJob(job: JSONObject) {
+        val jobId = job.getString("job_id")
+        val recipient = job.getString("recipient")
+        val message = job.getString("message")
 
-        okHttpClient.newCall(claimReq).execute().use { response ->
-            if (!response.isSuccessful) {
-                Log.e("SMS_GATEWAY", "Gagal claim job $jobId")
-                return
-            }
-        }
+        Log.d(TAG, "🚀 Memproses Job SMS: $jobId ke $recipient")
 
-        // Step B: Mark as SENDING & Dispatch via SIM Card
-        val smsManager = SmsManager.getDefault()
+        // 1. Kunci (Claim) Job via WebSocket
+        val claimMessage = JSONObject().apply {
+            put("action", "claim")
+            put("job_id", jobId)
+        }.toString()
+        webSocket?.send(claimMessage)
+
+        // 2. Beri sinyal mulai kirim
+        val startMessage = JSONObject().apply {
+            put("action", "start")
+            put("job_id", jobId)
+        }.toString()
+        webSocket?.send(startMessage)
+
+        // 3. Eksekusi Kirim SMS lewat SIM Card fisik Android
         try {
-            // Dispatch SMS Native Android
-            smsManager.sendTextMessage(recipient, null, message, null, null)
-            Log.d("SMS_GATEWAY", "✅ SMS terkirim ke $recipient")
+            val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                applicationContext.getSystemService(SmsManager::class.java)
+            } else {
+                SmsManager.getDefault()
+            }
 
-            // Step C: Lapor Sukses (SENT)
-            val reportBody = JSONObject().apply {
+            smsManager.sendTextMessage(recipient, null, message, null, null)
+            Log.d(TAG, "✅ SMS berhasil dikirim ke tower seluler untuk $recipient")
+
+            // 4. Lapor Status SUKSES (SENT) via WebSocket
+            val reportSuccess = JSONObject().apply {
+                put("action", "report")
+                put("job_id", jobId)
                 put("status", "SENT")
                 put("operator_status_code", "RESULT_OK")
-                put("operator_status_message", "Sent via SIM")
+                put("operator_status_message", "Sent successfully by Android Modem")
             }.toString()
+            webSocket?.send(reportSuccess)
 
-            val reportReq = Request.Builder()
-                .url("$BASE_URL/jobs/$jobId/report")
-                .header("Authorization", "Bearer $DEVICE_TOKEN")
-                .post(reportBody.toRequestBody("application/json".toMediaType()))
-                .build()
-
-            okHttpClient.newCall(reportReq).execute()
         } catch (e: Exception) {
-            Log.e("SMS_GATEWAY", "❌ Gagal kirim SMS: ${e.message}")
-            // Lapor Gagal (FAILED)
-            val failBody = JSONObject().apply {
+            Log.e(TAG, "❌ Gagal kirim SMS via SIM: ${e.message}")
+
+            // Lapor Status GAGAL (FAILED) via WebSocket
+            val reportFailed = JSONObject().apply {
+                put("action", "report")
+                put("job_id", jobId)
                 put("status", "FAILED")
-                put("operator_status_message", e.message)
-                put("is_recoverable", true)
+                put("operator_status_message", e.message ?: "Send error")
+                put("is_recoverable", true) // Server akan auto-retry
             }.toString()
-
-            val reportReq = Request.Builder()
-                .url("$BASE_URL/jobs/$jobId/report")
-                .header("Authorization", "Bearer $DEVICE_TOKEN")
-                .post(failBody.toRequestBody("application/json".toMediaType()))
-                .build()
-
-            okHttpClient.newCall(reportReq).execute()
+            webSocket?.send(reportFailed)
         }
+    }
+
+    /**
+     * Kirim Heartbeat status baterai / sinyal via WebSocket
+     */
+    fun sendHeartbeat(battery: Int, signal: Int, isCharging: Boolean) {
+        val hb = JSONObject().apply {
+            put("action", "heartbeat")
+            put("battery_level", battery)
+            put("signal_strength", signal)
+            put("is_charging", isCharging)
+        }.toString()
+        webSocket?.send(hb)
+    }
+
+    private fun startForegroundNotification() {
+        val channelId = "sms_gateway_channel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "SMS Gateway Service",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
+        }
+
+        val notification: Notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("SMS Gateway Aktif")
+            .setContentText("Koneksi WebSocket terhubung untuk memproses antrean SMS")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .build()
+
+        startForeground(1001, notification)
+    }
+
+    override fun onDestroy() {
+        isServiceRunning = false
+        webSocket?.close(1000, "Service stopped")
+        super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    override fun onDestroy() {
-        eventSource?.cancel()
-        super.onDestroy()
-    }
 }
 ```
 
 ---
 
-## 🌐 Implementasi 2: Native WebSocket (`ws://` / `wss://`)
+## 📋 3. Format Protokol JSON WebSocket
 
-Jika Anda menjalankan WebSocket Daemon di server:
+### A. Push dari Server ke Android saat ada SMS baru:
+```json
+{
+  "event": "new_sms_job",
+  "timestamp": "2026-09-11 15:10:00",
+  "data": {
+    "job_id": "SMS-20260911-151000-A1B2C3",
+    "recipient": "081234567890",
+    "message": "Kode verifikasi Anda adalah 849201.",
+    "priority": 1
+  }
+}
+```
+
+### B. Kirim dari Android ke Server untuk Claim Job:
+```json
+{
+  "action": "claim",
+  "job_id": "SMS-20260911-151000-A1B2C3"
+}
+```
+
+### C. Kirim dari Android ke Server untuk Lapor Sukses (SENT):
+```json
+{
+  "action": "report",
+  "job_id": "SMS-20260911-151000-A1B2C3",
+  "status": "SENT",
+  "operator_status_code": "RESULT_OK",
+  "operator_status_message": "Delivered to cellular network"
+}
+```
+
+### D. Kirim dari Android ke Server untuk Lapor Gagal (FAILED):
+```json
+{
+  "action": "report",
+  "job_id": "SMS-20260911-151000-A1B2C3",
+  "status": "FAILED",
+  "operator_status_message": "NO_SERVICE / Pulsa habis",
+  "is_recoverable": true
+}
+```
+
+---
+
+## 🖥️ 4. Menjalankan WebSocket Server di VPS / Server
+
+Jalankan perintah ini di server:
 ```bash
+cd /home/u948840458/domains/secureapi.pandemenulis.com/public_html/sms
 php spark ws:serve --port 8085
 ```
 
-### Kode Kotlin Android (OkHttp WebSocketListener):
-```kotlin
-val wsUrl = "ws://secureapi.pandemenulis.com:8085?token=$DEVICE_TOKEN"
-val request = Request.Builder().url(wsUrl).build()
-
-val wsClient = okHttpClient.newWebSocket(request, object : WebSocketListener() {
-    override fun onOpen(webSocket: WebSocket, response: Response) {
-        Log.d("WS", "🟢 Terhubung ke WebSocket SMS Server!")
-    }
-
-    override fun onMessage(webSocket: WebSocket, text: String) {
-        Log.d("WS", "📩 Pesan masuk: $text")
-        val json = JSONObject(text)
-        val event = json.optString("event")
-
-        if (event == "new_sms_job") {
-            val job = json.getJSONObject("data")
-            val jobId = job.getString("job_id")
-            val recipient = job.getString("recipient")
-            val message = job.getString("message")
-
-            // Eksekusi kirim SMS
-            processAndSendSms(jobId, recipient, message)
-        }
-    }
-
-    override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-        Log.e("WS", "🔴 WebSocket Error: ${t.message}. Reconnecting in 3s...")
-        Thread.sleep(3000)
-        // trigger reconnect
-    }
-})
+Atau jalankan di background (Daemon):
+```bash
+nohup php spark ws:serve --port 8085 > writable/logs/websocket.log 2>&1 &
 ```
