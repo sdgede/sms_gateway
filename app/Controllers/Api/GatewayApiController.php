@@ -68,75 +68,90 @@ class GatewayApiController extends BaseController
 
         log_message('info', "[Gateway::pair] Incoming request from IP: " . $this->request->getIPAddress() . " | Content-Type: {$contentType} | Raw Body: {$rawBodyString}");
 
-        // Support both snake_case and camelCase field names from Mobile
-        $json = [
-            'pairing_code' => trim((string)($raw['pairing_code'] ?? $raw['code'] ?? $raw['pairingCode'] ?? '')),
-            'device_id'    => trim((string)($raw['device_id'] ?? $raw['deviceId'] ?? $raw['id'] ?? '')),
-            'device_name'  => $raw['device_name'] ?? $raw['deviceName'] ?? $raw['name'] ?? null,
-            'sim_operator' => $raw['sim_operator'] ?? $raw['simOperator'] ?? $raw['operator'] ?? null,
-            'sim_slot'     => isset($raw['sim_slot']) || isset($raw['simSlot']) ? (int)($raw['sim_slot'] ?? $raw['simSlot']) : 1,
-            'phone_number' => $raw['phone_number'] ?? $raw['phoneNumber'] ?? $raw['phone'] ?? null,
-            'app_version'  => $raw['app_version'] ?? $raw['appVersion'] ?? $raw['version'] ?? null,
-        ];
+        $pairingCode = trim((string)($raw['pairing_code'] ?? $raw['code'] ?? $raw['pairingCode'] ?? ''));
 
-        $rules = [
-            'pairing_code' => 'required|min_length[3]|max_length[32]',
-            'device_id'    => 'required|min_length[2]|max_length[100]',
-        ];
-
-        if (!$this->validateData($json, $rules)) {
-            $errors = $this->validator->getErrors();
-            log_message('error', "[Gateway::pair] 422 Validation Error: " . json_encode($errors) . " | Parsed data: " . json_encode($json) . " | Raw: {$rawBodyString}");
+        if (empty($pairingCode)) {
+            log_message('error', "[Gateway::pair] 422 Error: Missing pairing_code in payload: {$rawBodyString}");
 
             return $this->response->setStatusCode(422)->setJSON([
                 'status'  => 'error',
-                'code'    => 'VALIDATION_FAILED',
-                'message' => 'Validation failed: ' . implode(', ', $errors),
-                'errors'  => $errors,
+                'code'    => 'MISSING_PAIRING_CODE',
+                'message' => "Parameter 'pairing_code' wajib diisi.",
                 'debug'   => [
                     'received_raw_body' => $rawBodyString,
-                    'parsed_fields'     => $json,
-                    'content_type'      => $contentType,
+                    'parsed_fields'     => $raw,
                 ],
             ]);
         }
 
-        $pairingCode = trim($json['pairing_code']);
-        $deviceId = trim($json['device_id']);
-
-        // 1. Validate pairing code
+        // 1. Validate Pairing Code FIRST
         $validPairing = $this->pairingModel->validateCode($pairingCode);
         if (!$validPairing) {
-            log_message('error', "[Gateway::pair] Invalid/expired code: '{$pairingCode}' for device '{$deviceId}'");
+            log_message('error', "[Gateway::pair] Invalid/expired pairing code: '{$pairingCode}'");
 
             return $this->response->setStatusCode(400)->setJSON([
                 'status'  => 'error',
                 'code'    => 'INVALID_OR_EXPIRED_CODE',
-                'message' => "Pairing code '{$pairingCode}' is invalid, already used, or expired.",
+                'message' => "Kode pairing '{$pairingCode}' tidak valid, sudah pernah digunakan, atau sudah kadaluarsa. Silakan buat kode baru di dashboard.",
             ]);
         }
 
-        // 2. Generate secure device token
+        // 2. Extract or auto-generate device_id
+        $deviceId = trim((string)(
+            $raw['device_id'] ?? 
+            $raw['deviceId'] ?? 
+            $raw['android_id'] ?? 
+            $raw['id'] ?? 
+            ''
+        ));
+
+        if (empty($deviceId)) {
+            $modelStr = !empty($raw['device_model']) ? preg_replace('/[^A-Za-z0-9_-]/', '_', $raw['device_model']) : 'Android';
+            $deviceId = strtolower($modelStr) . '-' . substr(md5($pairingCode . ($raw['os_version'] ?? '') . time()), 0, 6);
+        }
+
+        // 3. Device Name: ALWAYS prioritized from what Admin set when generating pairing code
+        $deviceName = !empty($validPairing['device_name']) 
+            ? $validPairing['device_name'] 
+            : (!empty($raw['device_name']) ? $raw['device_name'] : (!empty($raw['device_model']) ? $raw['device_model'] : 'Android Gateway'));
+
+        // 4. Extract SIM info (support nested sim_info object or direct keys)
+        $simOperator = $raw['sim_operator'] 
+            ?? $raw['simOperator'] 
+            ?? ($raw['sim_info']['operator_name'] ?? ($raw['sim_info']['operator'] ?? null));
+
+        $simSlot = 1;
+        if (isset($raw['sim_info']['sim_slot'])) {
+            $simSlot = (int)$raw['sim_info']['sim_slot'];
+        } elseif (isset($raw['sim_slot'])) {
+            $simSlot = (int)$raw['sim_slot'];
+        }
+
+        $phoneNumber = $raw['phone_number'] 
+            ?? $raw['phoneNumber'] 
+            ?? ($raw['sim_info']['phone_number'] ?? null);
+
+        $appVersion = $raw['app_version'] 
+            ?? $raw['appVersion'] 
+            ?? null;
+
+        // 5. Generate secure device token
         $rawToken = 'gw_tok_' . bin2hex(random_bytes(24));
         $tokenHash = SmsGatewayModel::hashToken($rawToken);
-
-        $deviceName = !empty($json['device_name']) 
-            ? $json['device_name'] 
-            : ($validPairing['device_name'] ?? 'Android Gateway (' . substr($deviceId, 0, 8) . ')');
 
         $gatewayData = [
             'device_id'     => $deviceId,
             'device_name'   => $deviceName,
             'token_hash'    => $tokenHash,
             'status'        => 'ONLINE',
-            'sim_operator'  => $json['sim_operator'] ?? null,
-            'sim_slot'      => isset($json['sim_slot']) ? (int)$json['sim_slot'] : 1,
-            'phone_number'  => $json['phone_number'] ?? null,
-            'app_version'   => $json['app_version'] ?? null,
+            'sim_operator'  => $simOperator,
+            'sim_slot'      => $simSlot,
+            'phone_number'  => $phoneNumber,
+            'app_version'   => $appVersion,
             'last_seen_at'  => date('Y-m-d H:i:s'),
         ];
 
-        // 3. Upsert gateway record
+        // 6. Upsert gateway record
         $existing = $this->gatewayModel->findByDeviceId($deviceId);
         if ($existing) {
             $this->gatewayModel->update($existing['id'], $gatewayData);
@@ -144,17 +159,23 @@ class GatewayApiController extends BaseController
             $this->gatewayModel->insert($gatewayData);
         }
 
-        // 4. Mark pairing code used
+        // 7. Mark pairing code used
         $this->pairingModel->markAsUsed($validPairing['id'], $deviceId);
 
-        // 5. Audit log
+        // 8. Audit log
         $this->auditLogModel->log(
             actorType: 'GATEWAY',
             actorId: $deviceId,
             action: 'DEVICE_PAIRED',
             target: $deviceName,
-            metadata: ['sim_operator' => $json['sim_operator'] ?? null]
+            metadata: [
+                'sim_operator' => $simOperator,
+                'device_model' => $raw['device_model'] ?? null,
+                'os_version'   => $raw['os_version'] ?? null,
+            ]
         );
+
+        log_message('info', "[Gateway::pair] Device successfully paired! ID: {$deviceId} | Name: {$deviceName} | Operator: {$simOperator}");
 
         return $this->response->setStatusCode(200)->setJSON([
             'status'  => 'success',
