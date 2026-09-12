@@ -1108,15 +1108,6 @@
                 </tr>
             `).join('');
         }
-
-        // Render Incoming SMS (Inbox)
-        const inboxTbody = document.getElementById('inboxTableBody');
-        if (!data.incoming_messages || data.incoming_messages.length === 0) {
-            inboxTbody.innerHTML = `
-                <tr>
-                    <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 24px;">
-                        Belum ada SMS masuk yang diterima.
-                    </td>
     }
 
     // Set Message Presets
