@@ -67,7 +67,6 @@ class SmsDispatcher
             $labels[] = [
                 'id'    => 'firebase',
                 'name'  => 'Firebase FCM (HTTP v1)',
-                'icon'  => '🔥',
                 'badge' => 'USE_FIREBASE=true',
             ];
         }
@@ -75,7 +74,6 @@ class SmsDispatcher
             $labels[] = [
                 'id'    => 'sse',
                 'name'  => 'Server-Sent Events (SSE)',
-                'icon'  => '⚡',
                 'badge' => 'USE_SSE=true',
             ];
         }
@@ -83,7 +81,6 @@ class SmsDispatcher
             $labels[] = [
                 'id'    => 'websocket',
                 'name'  => 'WebSocket Real-Time',
-                'icon'  => '🔌',
                 'badge' => 'USE_WEBSOCKET=true',
             ];
         }

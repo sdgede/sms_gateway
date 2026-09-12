@@ -1,10 +1,10 @@
-# 🚀 Panduan Native WebSocket Android SMS Gateway
+# Panduan Native WebSocket Android SMS Gateway
 
 Dokumen ini adalah panduan lengkap untuk tim pengembang aplikasi Android untuk mengintegrasikan **Native WebSocket (RFC 6455)** secara *real-time*, dua arah (*bi-directional*), dan instan tanpa jeda polling.
 
 ---
 
-## 📡 Koneksi Native WebSocket
+## Koneksi Native WebSocket
 
 - **WebSocket URL**: `ws://secureapi.pandemenulis.com:8085?token=DEVICE_TOKEN`
 - **Alternatif Header**: `Authorization: Bearer DEVICE_TOKEN`
@@ -12,7 +12,7 @@ Dokumen ini adalah panduan lengkap untuk tim pengembang aplikasi Android untuk m
 
 ---
 
-## 🛠️ 1. Setup Dependency di Android
+## 1. Setup Dependency di Android
 
 Tambahkan library `OkHttp` di `app/build.gradle`:
 ```groovy
@@ -30,7 +30,7 @@ Dan pastikan permission di `AndroidManifest.xml`:
 
 ---
 
-## 📱 2. Kode Lengkap Android (Kotlin Foreground Service)
+## 2. Kode Lengkap Android (Kotlin Foreground Service)
 
 Berikut adalah implementasi lengkap Foreground Service dengan auto-reconnect, pengiriman SMS native, dan pelaporan status instan:
 
@@ -89,13 +89,13 @@ class SmsGatewayWebSocketService : Service() {
 
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
-                Log.d(TAG, "🟢 TERHUBUNG KE WEBSOCKET SERVER!")
+                Log.d(TAG, "TERHUBUNG KE WEBSOCKET SERVER!")
                 // Kirim info baterai awal
                 sendHeartbeat(85, 90, false)
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
-                Log.d(TAG, "📩 Pesan masuk dari Server: $text")
+                Log.d(TAG, "Pesan masuk dari Server: $text")
                 try {
                     val json = JSONObject(text)
                     val event = json.optString("event")
@@ -124,16 +124,16 @@ class SmsGatewayWebSocketService : Service() {
             }
 
             override fun onClosing(ws: WebSocket, code: Int, reason: String) {
-                Log.w(TAG, "🟡 WebSocket sedang ditutup: $reason")
+                Log.w(TAG, "WebSocket sedang ditutup: $reason")
             }
 
             override fun onClosed(ws: WebSocket, code: Int, reason: String) {
-                Log.w(TAG, "🔴 WebSocket terputus. Mencoba reconnect dalam 3 detik...")
+                Log.w(TAG, "WebSocket terputus. Mencoba reconnect dalam 3 detik...")
                 scheduleReconnect()
             }
 
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "❌ WebSocket Error: ${t.message}. Reconnecting...")
+                Log.e(TAG, "WebSocket Error: ${t.message}. Reconnecting...")
                 scheduleReconnect()
             }
         })
@@ -155,7 +155,7 @@ class SmsGatewayWebSocketService : Service() {
         val recipient = job.getString("recipient")
         val message = job.getString("message")
 
-        Log.d(TAG, "🚀 Memproses Job SMS: $jobId ke $recipient")
+        Log.d(TAG, "Memproses Job SMS: $jobId ke $recipient")
 
         // 1. Kunci (Claim) Job via WebSocket
         val claimMessage = JSONObject().apply {
@@ -180,7 +180,7 @@ class SmsGatewayWebSocketService : Service() {
             }
 
             smsManager.sendTextMessage(recipient, null, message, null, null)
-            Log.d(TAG, "✅ SMS berhasil dikirim ke tower seluler untuk $recipient")
+            Log.d(TAG, "SMS berhasil dikirim ke tower seluler untuk $recipient")
 
             // 4. Lapor Status SUKSES (SENT) via WebSocket
             val reportSuccess = JSONObject().apply {
@@ -193,7 +193,7 @@ class SmsGatewayWebSocketService : Service() {
             webSocket?.send(reportSuccess)
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Gagal kirim SMS via SIM: ${e.message}")
+            Log.e(TAG, "Gagal kirim SMS via SIM: ${e.message}")
 
             // Lapor Status GAGAL (FAILED) via WebSocket
             val reportFailed = JSONObject().apply {
@@ -253,7 +253,7 @@ class SmsGatewayWebSocketService : Service() {
 
 ---
 
-## 📋 3. Format Protokol JSON WebSocket
+## 3. Format Protokol JSON WebSocket
 
 ### A. Push dari Server ke Android saat ada SMS baru:
 ```json
@@ -301,7 +301,7 @@ class SmsGatewayWebSocketService : Service() {
 
 ---
 
-## 🖥️ 4. Menjalankan WebSocket Server di VPS / Server
+## 4. Menjalankan WebSocket Server di VPS / Server
 
 Jalankan perintah ini di server:
 ```bash

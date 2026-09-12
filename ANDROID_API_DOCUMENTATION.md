@@ -1,10 +1,10 @@
-# 📱 SMS Gateway Backend — Dokumentasi API & Integrasi Android
+# SMS Gateway Backend — Dokumentasi API & Integrasi Android
 
 Dokumentasi lengkap integrasi backend CodeIgniter 4 SMS Gateway dengan aplikasi Android (`com.httpsms`), Firebase Cloud Messaging (FCM), dan sistem backend eksternal (REST API).
 
 ---
 
-## 📑 Daftar Isi
+## Daftar Isi
 1. [Konfigurasi Umum & Base URL](#1-konfigurasi-umum--base-url)
 2. [Alur Autentikasi (Pairing vs API Key)](#2-alur-autentikasi-pairing-vs-api-key)
 3. [Alur Pairing HP Android (Tanpa API Key)](#3-alur-pairing-hp-android-tanpa-api-key)
@@ -345,7 +345,7 @@ Gunakan endpoint ini di backend utama Anda (Laravel, PHP, NodeJS, Python, C#, PO
 ## 7. Petunjuk Setup Firebase Service Account
 
 1. Buka [Firebase Console](https://console.firebase.google.com/) → Pilih Project Anda.
-2. Buka **Project Settings** (ikon gear ⚙️) → Tab **Service accounts**.
+2. Buka **Project Settings** (ikon gear di kiri atas) → Tab **Service accounts**.
 3. Klik tombol **Generate new private key** → Unduh file `.json`.
 4. Upload file tersebut ke server backend pada lokasi:
    ```

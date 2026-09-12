@@ -1,10 +1,10 @@
-# 📱 SMS Gateway Backend — Dokumentasi Lengkap & Panduan Integrasi
+# SMS Gateway Backend — Dokumentasi Lengkap & Panduan Integrasi
 
 Dokumentasi komprehensif untuk sistem **SMS Gateway Backend** berbasis **CodeIgniter 4**, **Firebase Cloud Messaging (FCM HTTP v1)**, dan aplikasi **Android Gateway Client** (`com.sevanam.androidsmsgateway` / `com.httpsms`) serta integrasi REST API untuk aplikasi pihak ketiga (Laravel, NodeJS, POS, E-commerce, Python, dll.).
 
 ---
 
-## 📑 Daftar Isi
+## Daftar Isi
 
 1. [Arsitektur Sistem & Alur Kerja](#1-arsitektur-sistem--alur-kerja)
 2. [Spesifikasi Teknis & Persyaratan Server](#2-spesifikasi-teknis--persyaratan-server)
@@ -158,7 +158,7 @@ Sistem menyediakan **3 pilihan metode komunikasi** untuk memicu pengiriman SMS k
 
 ### Langkah Setup Firebase:
 1. Masuk ke [Firebase Console](https://console.firebase.google.com/) dan buka project Anda.
-2. Klik ikon ⚙️ **Project Settings** (di kiri atas) → pilih tab **Service accounts**.
+2. Klik ikon **Project Settings** (ikon gear di kiri atas) → pilih tab **Service accounts**.
 3. Klik tombol **Generate new private key** → Simpan file `.json` yang terunduh.
 4. Terapkan kredensial tersebut ke server dengan salah satu cara berikut:
 
@@ -593,7 +593,7 @@ Membuat kode pairing secara programmatik dari sistem admin lain.
 ## 8. Web Dashboard & Monitoring Interaktif
 
 Dashboard interaktif dapat diakses langsung melalui browser di:
-👉 `https://domain-anda.com/sms/`
+- `https://domain-anda.com/sms/`
 
 ### Fitur Dashboard:
 1. **Live Analytics Cards:** Total Dispatched, Success Delivered, Pending Queue, Gateway Active, dan status Firebase FCM.

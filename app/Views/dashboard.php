@@ -506,7 +506,9 @@
     <!-- Top Header -->
     <header>
         <div class="brand">
-            <div class="brand-icon">📱</div>
+            <div class="brand-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+            </div>
             <div class="brand-title">
                 <h1>Internal SMS Gateway Control Center</h1>
                 <p>Android SIM-Based Transactional SMS Router & Dispatcher</p>
@@ -518,13 +520,13 @@
                 <span id="liveStatusText">GATEWAY ENGINE ACTIVE</span>
             </div>
             <div class="fcm-badge" id="fcmStatusBadge">
-                🔥 FCM: Checking...
+                Checking dispatcher...
             </div>
             <button class="btn btn-secondary btn-sm" onclick="runWorker()">
-                ⚡ Run Worker
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Run Worker
             </button>
             <button class="btn btn-secondary btn-sm" onclick="fetchLiveData()">
-                🔄 Refresh
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> Refresh
             </button>
         </div>
     </header>
@@ -572,7 +574,7 @@
             <div class="panel">
                 <div class="panel-header">
                     <div class="panel-title">
-                        🔑 Generate One-Time Pairing Code
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg> Generate One-Time Pairing Code
                     </div>
                 </div>
                 <form id="pairingForm" onsubmit="handleGeneratePairing(event)">
@@ -595,21 +597,25 @@
                             <div id="pairingQrcode"></div>
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
-                            📷 Scan QR Code ini dari Aplikasi Android
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg> Scan QR Code dari Aplikasi Android
                         </div>
                     </div>
 
                     <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px;" id="pairingExpiryNote">Aktif permanen sampai di-pairing</div>
                     <div style="display: flex; justify-content: center; gap: 8px;">
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="copyActivePairingCode()">📋 Salin Kode</button>
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="showQrModal(latestPairingCode, document.getElementById('deviceNameInput').value)">🔍 Perbesar QR</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="copyActivePairingCode()">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg> Salin Kode
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="showQrModal(latestPairingCode, document.getElementById('deviceNameInput').value)">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/><line x1="11" x2="11" y1="8" y2="14"/><line x1="8" x2="14" y1="11" y2="11"/></svg> Perbesar QR
+                        </button>
                     </div>
                 </div>
 
                 <!-- Active Unused Pairing Codes List -->
                 <div id="activeCodesContainer" style="margin-top: 16px; display: none;">
                     <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">
-                        📌 Kode Pairing Aktif (Belum Digunakan)
+                        Kode Pairing Aktif (Belum Digunakan)
                     </div>
                     <div id="activeCodesList" style="display: flex; flex-direction: column; gap: 8px;"></div>
                 </div>
@@ -619,14 +625,14 @@
             <div class="panel">
                 <div class="panel-header">
                     <div class="panel-title">
-                        ✉️ Kirim Test SMS ke Queue
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg> Kirim Test SMS ke Queue
                     </div>
                 </div>
 
                 <div style="display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap;">
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="setPreset('otp')">📱 Preset OTP</button>
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="setPreset('trx')">💰 Preset Transaksi</button>
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="setPreset('notif')">🔔 Preset Notif</button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="setPreset('otp')">Preset OTP</button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="setPreset('trx')">Preset Transaksi</button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="setPreset('notif')">Preset Notif</button>
                 </div>
 
                 <form id="sendSmsForm" onsubmit="handleSendSms(event)">
@@ -655,7 +661,7 @@
                         <input type="text" id="clientMsgIdInput" class="form-control" placeholder="Otomatis jika kosong (e.g. TRX-2026...)">
                     </div>
                     <button type="submit" class="btn btn-primary" style="width: 100%;">
-                        🚀 Masukkan ke Antrean SMS (Trigger FCM)
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 6px;"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg> Masukkan ke Antrean SMS
                     </button>
                 </form>
             </div>
@@ -667,16 +673,16 @@
                 <!-- Navigation Tabs -->
                 <div class="tab-nav">
                     <button class="tab-btn active" onclick="switchTab('queue')">
-                        📋 Antrean SMS <span class="tab-badge" id="tabBadgeQueue">0</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 6px;"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg> Antrean SMS <span class="tab-badge" id="tabBadgeQueue">0</span>
                     </button>
                     <button class="tab-btn" onclick="switchTab('inbox')">
-                        📥 SMS Masuk (Inbox) <span class="tab-badge" id="tabBadgeInbox">0</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 6px;"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg> SMS Masuk (Inbox) <span class="tab-badge" id="tabBadgeInbox">0</span>
                     </button>
                     <button class="tab-btn" onclick="switchTab('lines')">
-                        📱 SIM Lines & FCM <span class="tab-badge" id="tabBadgeLines">0</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 6px;"><path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z"/><path d="M9 10v4"/><path d="M15 10v4"/><path d="M9 14h6"/></svg> SIM Lines & FCM <span class="tab-badge" id="tabBadgeLines">0</span>
                     </button>
                     <button class="tab-btn" onclick="switchTab('devices')">
-                        📡 Perangkat Android <span class="tab-badge" id="tabBadgeDevices">0</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 6px;"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></svg> Perangkat Android <span class="tab-badge" id="tabBadgeDevices">0</span>
                     </button>
                 </div>
 
@@ -850,11 +856,15 @@
         const toast = document.createElement('div');
         toast.className = 'toast';
         
-        let icon = 'ℹ️';
-        if (type === 'success') icon = '✅';
-        if (type === 'error') icon = '⚠️';
+        let iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+        if (type === 'success') {
+            iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" style="flex-shrink:0;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+        }
+        if (type === 'error') {
+            iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+        }
 
-        toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+        toast.innerHTML = `<span style="display:inline-flex; align-items:center;">${iconSvg}</span> <span>${message}</span>`;
         container.appendChild(toast);
 
         setTimeout(() => {
@@ -885,18 +895,18 @@
         // Dispatcher & FCM Status Badge
         const fcmBadge = document.getElementById('fcmStatusBadge');
         if (data.dispatcher_labels && data.dispatcher_labels.length > 0) {
-            const badgeText = data.dispatcher_labels.map(l => `${l.icon} ${l.name}`).join(' | ');
+            const badgeText = data.dispatcher_labels.map(l => l.name).join(' | ');
             fcmBadge.innerHTML = badgeText;
             fcmBadge.style.color = '#818cf8';
             fcmBadge.style.borderColor = 'rgba(99, 102, 241, 0.4)';
             fcmBadge.style.background = 'rgba(99, 102, 241, 0.12)';
         } else if (data.fcm_status && data.fcm_status.configured) {
-            fcmBadge.innerHTML = `🔥 FCM: Active (${data.fcm_status.mode})`;
+            fcmBadge.innerHTML = `FCM: Active (${data.fcm_status.mode})`;
             fcmBadge.style.color = '#34d399';
             fcmBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
             fcmBadge.style.background = 'rgba(16, 185, 129, 0.12)';
         } else {
-            fcmBadge.innerHTML = `⚠️ Mode: Direct Polling`;
+            fcmBadge.innerHTML = `Mode: Direct Polling`;
             fcmBadge.style.color = '#fbbf24';
             fcmBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
             fcmBadge.style.background = 'rgba(245, 158, 11, 0.12)';
@@ -912,12 +922,11 @@
         
         const total = stats.total_jobs || 0;
         const success = (stats.delivered || 0) + (stats.sent || 0);
-        const rate = total > 0 ? Math.round((success / total) * 100) : 0;
-        document.getElementById('statDeliveryRate').innerText = `${rate}% success rate`;
+        const rate = total > 0 ? Math.round((success / total) * 100) : 100;
+        document.getElementById('statSuccessRate').innerText = `${rate}%`;
 
-        const pending = (stats.pending || 0) + (stats.claimed || 0) + (stats.sending || 0);
-        document.getElementById('statPending').innerText = pending;
-        document.getElementById('statPendingSub').innerText = `${stats.pending || 0} pending, ${stats.sending || 0} sending`;
+        document.getElementById('statPending').innerText = stats.pending || 0;
+        document.getElementById('statFailed').innerText = (stats.failed || 0) + (stats.failed_permanent || 0);
 
         document.getElementById('statPhoneLines').innerText = data.stats.phone_lines_count || (data.phone_lines || []).length;
         document.getElementById('statIncoming').innerText = data.stats.incoming_count || (data.incoming_messages || []).length;
@@ -930,7 +939,7 @@
 
         document.getElementById('lastUpdatedTag').innerText = `Updated ${new Date().toLocaleTimeString()}`;
 
-        // Render Active Pairing Codes
+        // Render Active Pairing Codes List
         const activeContainer = document.getElementById('activeCodesContainer');
         const activeList = document.getElementById('activeCodesList');
         const unusedCodes = (data.pairing_codes || []).filter(c => !c.is_used);
@@ -944,9 +953,15 @@
                         <span style="font-size: 11px; color: var(--text-dim); margin-left: 6px;">(${escapeHtml(c.device_name)})</span>
                     </div>
                     <div style="display: flex; gap: 4px;">
-                        <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 11px;" onclick="showQrModal('${c.code}', '${escapeHtml(c.device_name)}')" title="Lihat QR Code">📷</button>
-                        <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 11px;" onclick="copyCodeText('${c.code}')" title="Salin Kode">📋</button>
-                        <button class="btn btn-danger-subtle btn-sm" style="padding: 2px 8px; font-size: 11px;" onclick="handleDeletePairing(${c.id})" title="Hapus Kode">🗑️</button>
+                        <button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px; display: inline-flex; align-items: center;" onclick="showQrModal('${c.code}', '${escapeHtml(c.device_name)}')" title="Lihat QR Code">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        </button>
+                        <button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px; display: inline-flex; align-items: center;" onclick="copyCodeText('${c.code}')" title="Salin Kode">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        </button>
+                        <button class="btn btn-danger-subtle btn-sm" style="padding: 4px 8px; font-size: 11px; display: inline-flex; align-items: center;" onclick="handleDeletePairing(${c.id})" title="Hapus Kode">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </button>
                     </div>
                 </div>
             `).join('');
@@ -970,12 +985,14 @@
                 if (g.computed_status === 'ONLINE') badgeClass = 'badge-online';
                 if (g.computed_status === 'DISABLED') badgeClass = 'badge-disabled';
 
-                const battery = g.battery_level !== null ? `${g.battery_level}% ${g.is_charging ? '⚡' : ''}` : '-';
+                const battery = g.battery_level !== null ? `${g.battery_level}%${g.is_charging ? ' (Chg)' : ''}` : '-';
                 const signal = g.signal_strength !== null ? `${g.signal_strength}%` : '-';
 
                 const isBlocked = g.status === 'DISABLED';
                 const toggleAction = isBlocked ? 'enable' : 'disable';
-                const toggleLabel = isBlocked ? '🟢 Enable' : '⏸️ Disable';
+                const toggleLabel = isBlocked ? 
+                    '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="margin-right: 3px;"><polygon points="5 3 19 12 5 21 5 3"/></svg> Enable' : 
+                    '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="margin-right: 3px;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Disable';
 
                 return `
                     <tr>
@@ -991,21 +1008,21 @@
                             <div class="mono-tag">${escapeHtml(g.phone_number || '-')}</div>
                         </td>
                         <td>
-                            <div>🔋 ${battery}</div>
-                            <div style="font-size: 11px; color: var(--text-dim);">📶 ${signal}</div>
+                            <div>BAT: ${battery}</div>
+                            <div style="font-size: 11px; color: var(--text-dim);">SIG: ${signal}</div>
                         </td>
                         <td>
                             <div style="font-size: 12px;">${g.last_seen_human}</div>
                         </td>
                         <td style="white-space: nowrap;">
-                            <button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px; margin-right: 4px;" title="${toggleAction} device" onclick="handleGatewayAction('${g.device_id}', '${toggleAction}')">
+                            <button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px; margin-right: 4px; display: inline-flex; align-items: center;" title="${toggleAction} device" onclick="handleGatewayAction('${g.device_id}', '${toggleAction}')">
                                 ${toggleLabel}
                             </button>
-                            <button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px; margin-right: 4px; color: #fbbf24;" title="Revoke Token" onclick="handleGatewayAction('${g.device_id}', 'revoke')">
-                                🔑 Revoke
+                            <button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px; margin-right: 4px; color: #fbbf24; display: inline-flex; align-items: center; gap: 3px;" title="Revoke Token" onclick="handleGatewayAction('${g.device_id}', 'revoke')">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 3-9.5 9.5"/><path d="m15.5 7.5 2.5 2.5"/></svg> Revoke
                             </button>
-                            <button class="btn btn-danger-subtle btn-sm" style="padding: 4px 8px; font-size: 11px;" title="Hapus Device" onclick="handleGatewayAction('${g.device_id}', 'delete')">
-                                🗑️
+                            <button class="btn btn-danger-subtle btn-sm" style="padding: 4px 8px; font-size: 11px; display: inline-flex; align-items: center;" title="Hapus Device" onclick="handleGatewayAction('${g.device_id}', 'delete')">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                             </button>
                         </td>
                     </tr>
@@ -1058,11 +1075,11 @@
                             <div style="font-size: 11px; color: var(--text-muted);">${j.created_at || '-'}</div>
                         </td>
                         <td style="white-space: nowrap;">
-                            <button class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px; margin-right: 4px;" title="Reset ke PENDING agar langsung dikirim oleh Android" onclick="handleRequeueSms('${j.job_id}')">
-                                🚀 Kirim Ulang
+                            <button class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px; margin-right: 4px; display: inline-flex; align-items: center; gap: 4px;" title="Reset ke PENDING agar langsung dikirim oleh Android" onclick="handleRequeueSms('${j.job_id}')">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Kirim Ulang
                             </button>
-                            <button class="btn btn-danger-subtle btn-sm" style="padding: 4px 8px; font-size: 11px;" title="Hapus SMS" onclick="handleDeleteSms('${j.job_id}')">
-                                🗑️
+                            <button class="btn btn-danger-subtle btn-sm" style="padding: 4px 8px; font-size: 11px; display: inline-flex; align-items: center;" title="Hapus SMS" onclick="handleDeleteSms('${j.job_id}')">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                             </button>
                         </td>
                     </tr>
@@ -1108,8 +1125,8 @@
                         <div style="font-size: 12px;">${l.updated_human || '-'}</div>
                     </td>
                     <td>
-                        <button class="btn btn-danger-subtle btn-sm" style="padding: 4px 8px; font-size: 11px;" title="Hapus Line" onclick="handleDeletePhoneLine('${l.id}')">
-                            🗑️
+                        <button class="btn btn-danger-subtle btn-sm" style="padding: 4px 8px; font-size: 11px; display: inline-flex; align-items: center;" title="Hapus Line" onclick="handleDeletePhoneLine('${l.id}')">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                         </button>
                     </td>
                 </tr>
@@ -1148,8 +1165,8 @@
                         <div style="font-size: 12px;">${m.received_human || m.received_at || '-'}</div>
                     </td>
                     <td>
-                        <button class="btn btn-danger-subtle btn-sm" style="padding: 4px 8px; font-size: 11px;" title="Hapus SMS Masuk" onclick="handleDeleteIncoming('${m.id}')">
-                            🗑️
+                        <button class="btn btn-danger-subtle btn-sm" style="padding: 4px 8px; font-size: 11px; display: inline-flex; align-items: center;" title="Hapus SMS Masuk" onclick="handleDeleteIncoming('${m.id}')">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                         </button>
                     </td>
                 </tr>
@@ -1172,8 +1189,8 @@
             msgInput.value = `Pembayaran berhasil! Saldo Anda berkurang Rp ${nominal.toLocaleString('id-ID')} untuk transaksi di Toko Online. Sisa saldo: Rp 2.500.000.`;
             prioInput.value = '2';
         } else if (type === 'notif') {
-            msgInput.value = `Halo, pengingat jadwal layanan Anda besok pukul 10:00 WIB. Mohon hadir 15 menit sebelum waktu yang ditentukan. Terima kasih.`;
-            prioInput.value = '3';
+            msgInput.value = `Halo, pesanan Anda #ORD-98214 sedang dalam perjalanan oleh kurir. Terima kasih telah berbelanja!`;
+            prioInput.value = '2';
         }
         if (!recInput.value) {
             recInput.value = '081234567890';
@@ -1489,7 +1506,10 @@
 <!-- QR Code Modal -->
 <div id="qrModal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(8px); z-index: 99999; align-items: center; justify-content: center; padding: 20px;" onclick="if(event.target === this) closeQrModal()">
     <div style="background: #121826; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 28px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.7); position: relative; animation: slideIn 0.25s ease;">
-        <div style="font-size: 16px; font-weight: 700; margin-bottom: 4px;">📱 Scan Pairing QR Code</div>
+        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; font-weight: 700; margin-bottom: 4px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            Scan Pairing QR Code
+        </div>
         <div id="modalDeviceName" style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Android Gateway Device</div>
         
         <div style="background: white; padding: 16px; border-radius: 16px; display: inline-block; margin-bottom: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
@@ -1498,11 +1518,14 @@
 
         <div style="font-family: var(--font-mono); font-size: 28px; font-weight: 800; letter-spacing: 0.2em; color: #818cf8; margin-bottom: 8px;" id="modalCodeText">------</div>
         <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 20px;">
-            Arahkan scanner kamera/aplikasi Android Gateway ke QR Code ini untuk verifikasi pairing instan.
+            Arahkan scanner kamera atau aplikasi Android Gateway ke QR Code ini untuk verifikasi pairing instan.
         </p>
 
         <div style="display: flex; gap: 10px; justify-content: center;">
-            <button class="btn btn-secondary btn-sm" onclick="copyActivePairingCode()">📋 Salin Kode</button>
+            <button class="btn btn-secondary btn-sm" onclick="copyActivePairingCode()" style="display: inline-flex; align-items: center; gap: 4px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Salin Kode
+            </button>
             <button class="btn btn-primary btn-sm" onclick="closeQrModal()">Tutup</button>
         </div>
     </div>
