@@ -820,9 +820,19 @@
 <div id="toastContainer"></div>
 
 <script>
-    // Robust BASE_URL detection for root, subfolder (/sms), and ports
-    const BASE_URL = window.location.origin + window.location.pathname.replace(/\/index\.php\/?$/, '').replace(/\/+$/, '');
+    // Robust BASE_URL detection: uses PHP base_url() with browser pathname fallback
+    const BASE_URL = '<?= rtrim(base_url(), '/') ?>' || (window.location.origin + window.location.pathname.replace(/\/index\.php\/?$/, '').replace(/\/+$/, ''));
     let latestPairingCode = '';
+
+    function setElText(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.innerText = val;
+    }
+
+    function setElHtml(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = val;
+    }
 
     // Tab Switching
     function switchTab(tabId) {
@@ -830,17 +840,17 @@
         document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
 
         if (tabId === 'queue') {
-            document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
-            document.getElementById('tabPaneQueue').classList.add('active');
+            document.querySelector('.tab-btn:nth-child(1)')?.classList.add('active');
+            document.getElementById('tabPaneQueue')?.classList.add('active');
         } else if (tabId === 'inbox') {
-            document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
-            document.getElementById('tabPaneInbox').classList.add('active');
+            document.querySelector('.tab-btn:nth-child(2)')?.classList.add('active');
+            document.getElementById('tabPaneInbox')?.classList.add('active');
         } else if (tabId === 'lines') {
-            document.querySelector('.tab-btn:nth-child(3)').classList.add('active');
-            document.getElementById('tabPaneLines').classList.add('active');
+            document.querySelector('.tab-btn:nth-child(3)')?.classList.add('active');
+            document.getElementById('tabPaneLines')?.classList.add('active');
         } else if (tabId === 'devices') {
-            document.querySelector('.tab-btn:nth-child(4)').classList.add('active');
-            document.getElementById('tabPaneDevices').classList.add('active');
+            document.querySelector('.tab-btn:nth-child(4)')?.classList.add('active');
+            document.getElementById('tabPaneDevices')?.classList.add('active');
         }
     }
 
@@ -853,6 +863,7 @@
 
     function showToast(message, type = 'info') {
         const container = document.getElementById('toastContainer');
+        if (!container) return;
         const toast = document.createElement('div');
         toast.className = 'toast';
         
@@ -879,10 +890,10 @@
     async function fetchLiveData() {
         try {
             const res = await fetch(`${BASE_URL}/web/data`);
-            if (!res.ok) throw new Error('Gagal mengambil data dari server');
+            if (!res.ok) throw new Error(`HTTP ${res.status}: Gagal mengambil data`);
             const result = await res.json();
 
-            if (result.status === 'success') {
+            if (result && result.status === 'success') {
                 renderDashboard(result.data);
             }
         } catch (err) {
@@ -892,52 +903,57 @@
 
     // Render Data into DOM
     function renderDashboard(data) {
+        if (!data) return;
+
         // Dispatcher & FCM Status Badge
         const fcmBadge = document.getElementById('fcmStatusBadge');
-        if (data.dispatcher_labels && data.dispatcher_labels.length > 0) {
-            const badgeText = data.dispatcher_labels.map(l => l.name).join(' | ');
-            fcmBadge.innerHTML = badgeText;
-            fcmBadge.style.color = '#818cf8';
-            fcmBadge.style.borderColor = 'rgba(99, 102, 241, 0.4)';
-            fcmBadge.style.background = 'rgba(99, 102, 241, 0.12)';
-        } else if (data.fcm_status && data.fcm_status.configured) {
-            fcmBadge.innerHTML = `FCM: Active (${data.fcm_status.mode})`;
-            fcmBadge.style.color = '#34d399';
-            fcmBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-            fcmBadge.style.background = 'rgba(16, 185, 129, 0.12)';
-        } else {
-            fcmBadge.innerHTML = `Mode: Direct Polling`;
-            fcmBadge.style.color = '#fbbf24';
-            fcmBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
-            fcmBadge.style.background = 'rgba(245, 158, 11, 0.12)';
+        if (fcmBadge) {
+            if (data.dispatcher_labels && data.dispatcher_labels.length > 0) {
+                const badgeText = data.dispatcher_labels.map(l => l.name).join(' | ');
+                fcmBadge.innerHTML = badgeText;
+                fcmBadge.style.color = '#818cf8';
+                fcmBadge.style.borderColor = 'rgba(99, 102, 241, 0.4)';
+                fcmBadge.style.background = 'rgba(99, 102, 241, 0.12)';
+            } else if (data.fcm_status && data.fcm_status.configured) {
+                fcmBadge.innerHTML = `FCM: Active (${data.fcm_status.mode})`;
+                fcmBadge.style.color = '#34d399';
+                fcmBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+                fcmBadge.style.background = 'rgba(16, 185, 129, 0.12)';
+            } else {
+                fcmBadge.innerHTML = `Mode: Direct Polling`;
+                fcmBadge.style.color = '#fbbf24';
+                fcmBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+                fcmBadge.style.background = 'rgba(245, 158, 11, 0.12)';
+            }
         }
 
         // Stats
         const stats = data.stats || {};
-        document.getElementById('statGateways').innerText = `${stats.gateways_online || 0} / ${stats.gateways_count || 0}`;
-        document.getElementById('statGatewaysSub').innerText = stats.gateways_online > 0 ? `${stats.gateways_online} ready to dispatch` : 'No active devices';
+        setElText('statGateways', `${stats.gateways_online || 0} / ${stats.gateways_count || 0}`);
+        setElText('statGatewaysSub', stats.gateways_online > 0 ? `${stats.gateways_online} ready to dispatch` : 'No active devices');
 
-        document.getElementById('statTotal').innerText = stats.total_jobs || 0;
-        document.getElementById('statDelivered').innerText = (stats.delivered || 0) + (stats.sent || 0);
+        setElText('statTotal', stats.total_jobs || 0);
+        setElText('statDelivered', (stats.delivered || 0) + (stats.sent || 0));
         
         const total = stats.total_jobs || 0;
         const success = (stats.delivered || 0) + (stats.sent || 0);
         const rate = total > 0 ? Math.round((success / total) * 100) : 100;
-        document.getElementById('statSuccessRate').innerText = `${rate}%`;
+        setElText('statDeliveryRate', `${rate}% success rate`);
 
-        document.getElementById('statPending').innerText = stats.pending || 0;
-        document.getElementById('statFailed').innerText = (stats.failed || 0) + (stats.failed_permanent || 0);
+        const pending = (stats.pending || 0) + (stats.claimed || 0) + (stats.sending || 0);
+        setElText('statPending', pending);
+        setElText('statPendingSub', `${stats.pending || 0} pending, ${stats.sending || 0} sending`);
 
-        document.getElementById('statPhoneLines').innerText = data.stats.phone_lines_count || (data.phone_lines || []).length;
-        document.getElementById('statIncoming').innerText = data.stats.incoming_count || (data.incoming_messages || []).length;
+        setElText('statPhoneLines', data.stats.phone_lines_count || (data.phone_lines || []).length);
+        setElText('statIncoming', data.stats.incoming_count || (data.incoming_messages || []).length);
 
         // Tab Badges
-        document.getElementById('tabBadgeQueue').innerText = (data.jobs || []).length;
-        document.getElementById('tabBadgeInbox').innerText = (data.incoming_messages || []).length;
-        document.getElementById('tabBadgeLines').innerText = (data.phone_lines || []).length;
-        document.getElementById('tabBadgeDevices').innerText = (data.gateways || []).length;
+        setElText('tabBadgeQueue', (data.jobs || []).length);
+        setElText('tabBadgeInbox', (data.incoming_messages || []).length);
+        setElText('tabBadgeLines', (data.phone_lines || []).length);
+        setElText('tabBadgeDevices', (data.gateways || []).length);
 
-        document.getElementById('lastUpdatedTag').innerText = `Updated ${new Date().toLocaleTimeString()}`;
+        setElText('lastUpdatedTag', `Updated ${new Date().toLocaleTimeString()}`);
 
         // Render Active Pairing Codes List
         const activeContainer = document.getElementById('activeCodesContainer');
