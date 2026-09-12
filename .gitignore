@@ -144,3 +144,4 @@ _modules/*
 
 /results/
 /phpunit.xml
+/writable/sms_gateway_docks/
