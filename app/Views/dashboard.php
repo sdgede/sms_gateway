@@ -882,15 +882,21 @@
 
     // Render Data into DOM
     function renderDashboard(data) {
-        // FCM Status Badge
+        // Dispatcher & FCM Status Badge
         const fcmBadge = document.getElementById('fcmStatusBadge');
-        if (data.fcm_status && data.fcm_status.configured) {
+        if (data.dispatcher_labels && data.dispatcher_labels.length > 0) {
+            const badgeText = data.dispatcher_labels.map(l => `${l.icon} ${l.name}`).join(' | ');
+            fcmBadge.innerHTML = badgeText;
+            fcmBadge.style.color = '#818cf8';
+            fcmBadge.style.borderColor = 'rgba(99, 102, 241, 0.4)';
+            fcmBadge.style.background = 'rgba(99, 102, 241, 0.12)';
+        } else if (data.fcm_status && data.fcm_status.configured) {
             fcmBadge.innerHTML = `🔥 FCM: Active (${data.fcm_status.mode})`;
             fcmBadge.style.color = '#34d399';
             fcmBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
             fcmBadge.style.background = 'rgba(16, 185, 129, 0.12)';
         } else {
-            fcmBadge.innerHTML = `⚠️ FCM: Not Configured`;
+            fcmBadge.innerHTML = `⚠️ Mode: Direct Polling`;
             fcmBadge.style.color = '#fbbf24';
             fcmBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
             fcmBadge.style.background = 'rgba(245, 158, 11, 0.12)';

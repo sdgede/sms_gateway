@@ -107,7 +107,14 @@ app.baseURL = 'https://secureapi.pandemenulis.com/sms/'
 # Global API Key untuk Server Eksternal (Laravel, NodeJS, dll)
 app.smsApiKey = 'sms_secret_api_key_2026'
 
-# Lokasi File Kredensial Firebase Service Account
+#--------------------------------------------------------------------
+# 3 METODE DISPATCH KE ANDROID (PILIH METODE DENGAN TRUE / FALSE)
+#--------------------------------------------------------------------
+USE_FIREBASE  = true    # Metode 1: Google Firebase Cloud Messaging (FCM HTTP v1)
+USE_SSE       = false   # Metode 2: Server-Sent Events (SSE Stream via HTTP)
+USE_WEBSOCKET = false   # Metode 3: WebSocket Real-Time Daemon
+
+# Lokasi File Kredensial Firebase Service Account (Jika USE_FIREBASE = true)
 fcm.credentialsFile = 'writable/firebase/service-account.json'
 
 # Konfigurasi Database SQLite (Otomatis absolut ke folder writable/)
@@ -125,6 +132,22 @@ chmod -R 775 writable
 ```bash
 php spark migrate
 ```
+
+---
+
+## 4. Tiga (3) Metode Dispatch ke Android (`.env`)
+
+Sistem menyediakan **3 pilihan metode komunikasi** untuk memicu pengiriman SMS ke HP Android secara instan:
+
+| Metode | Pengaturan di `.env` | Cara Kerja | Keunggulan |
+|---|---|---|---|
+| **1. Firebase FCM (HTTP v1)** *(Default)* | `USE_FIREBASE = true` | Server mengirim push silent data ke Android (`KEY_MESSAGE_ID`), Android bangun dan mengambil SMS via REST API. | Paling hemat baterai di Android, HP bisa standby/layar mati, tidak butuh port khusus. |
+| **2. Server-Sent Events (SSE)** | `USE_SSE = true` | Android terhubung ke stream HTTP persistent (`GET /api/v1/gateway/jobs/stream`). Setiap ada SMS baru langsung di-push. | Tanpa dependensi Firebase / Google Play Service, berjalan di port HTTP(S) standar web server. |
+| **3. WebSocket Daemon** | `USE_WEBSOCKET = true` | Android terhubung ke server WebSocket real-time (`ws://...`). | Latensi instan milidetik, koneksi full-duplex dua arah. |
+
+> [!TIP]
+> Anda cukup mengeset `true` pada metode yang ingin digunakan di `.env`. Jika ingin mengaktifkan lebih dari 1 metode sekaligus (misal: Firebase + SSE), Anda cukup mengeset keduanya bernilai `true`.
+
 
 ---
 

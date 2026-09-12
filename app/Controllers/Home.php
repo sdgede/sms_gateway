@@ -91,8 +91,10 @@ class Home extends BaseController
             $inc['received_human'] = !empty($inc['received_at']) ? date('d M H:i:s', strtotime($inc['received_at'])) : '-';
         }
 
-        // 6. FCM Service Config Status
+        // 6. FCM Service Config Status & Dispatcher Methods
         $fcmStatus = FcmService::getConfigStatus();
+        $dispatcherMethods = \App\Libraries\SmsDispatcher::getActiveMethods();
+        $dispatcherLabels = \App\Libraries\SmsDispatcher::getActiveMethodLabels();
 
         // 7. Aggregate Stats
         $stats = $this->jobModel->getStatistics();
@@ -104,14 +106,16 @@ class Home extends BaseController
         return $this->response->setJSON([
             'status' => 'success',
             'data'   => [
-                'stats'             => $stats,
-                'gateways'          => $gateways,
-                'pairing_codes'     => $pairingCodes,
-                'phone_lines'       => $phoneLines,
-                'incoming_messages' => $incomingMessages,
-                'jobs'              => $jobs,
-                'fcm_status'        => $fcmStatus,
-                'server_time'       => date('Y-m-d H:i:s'),
+                'stats'              => $stats,
+                'gateways'           => $gateways,
+                'pairing_codes'      => $pairingCodes,
+                'phone_lines'        => $phoneLines,
+                'incoming_messages'  => $incomingMessages,
+                'jobs'               => $jobs,
+                'fcm_status'         => $fcmStatus,
+                'dispatcher_methods' => $dispatcherMethods,
+                'dispatcher_labels'  => $dispatcherLabels,
+                'server_time'        => date('Y-m-d H:i:s'),
             ],
         ]);
     }
@@ -305,26 +309,10 @@ class Home extends BaseController
             'updated_at'         => $now,
         ]);
 
-        log_message('info', "[Home::requeueSms] Job {$jobId} reset to PENDING. Triggering FCM push...");
+        log_message('info', "[Home::requeueSms] Job {$jobId} reset to PENDING. Triggering dispatch...");
 
-        // Broadcast via FCM Push to registered Android phone line(s)
-        try {
-            $lines = $this->phoneLineModel->where('is_active', 1)->where('fcm_token IS NOT NULL')->findAll();
-            if (empty($lines)) {
-                $anyLine = $this->phoneLineModel->getAnyActiveToken();
-                if ($anyLine) {
-                    $lines = [$anyLine];
-                }
-            }
-            foreach ($lines as $line) {
-                if (!empty($line['fcm_token'])) {
-                    log_message('info', "[Home::requeueSms] Re-pushing Job {$jobId} to line {$line['phone_number']} (FCM: " . substr($line['fcm_token'], 0, 20) . "...)");
-                    \App\Libraries\FcmService::pushMessage($line['fcm_token'], $jobId);
-                }
-            }
-        } catch (\Throwable $e) {
-            log_message('error', '[Home::requeueSms] FCM push failed: ' . $e->getMessage());
-        }
+        // Dispatch job using active methods configured in .env (Firebase / SSE / WebSocket)
+        \App\Libraries\SmsDispatcher::dispatchJob($job);
 
         $this->auditLogModel->log(
             actorType: 'ADMIN',
@@ -335,7 +323,7 @@ class Home extends BaseController
 
         return $this->response->setJSON([
             'status'  => 'success',
-            'message' => "Job {$jobId} berhasil di-reset ke antrean PENDING dan sinyal FCM dikirimkan ke Android.",
+            'message' => "Job {$jobId} berhasil di-reset ke antrean PENDING dan sinyal pengiriman telah ditembakkan.",
         ]);
     }
 

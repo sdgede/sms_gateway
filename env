@@ -69,11 +69,15 @@
 # logger.threshold = 4
 
 #--------------------------------------------------------------------
-# FIREBASE CLOUD MESSAGING (FCM)
+# SMS DISPATCH METHODS (PILIH METODE PENGIRIMAN KE ANDROID)
 #--------------------------------------------------------------------
-# Gunakan Service Account (HTTP v1 - Direkomendasikan)
-# fcm.credentialsFile = 'writable/firebase/service-account.json'
-# fcm.projectId = '' # Opsional jika sudah ada di file json
+USE_FIREBASE  = true
+USE_SSE       = false
+USE_WEBSOCKET = false
 
-# Atau gunakan Legacy Server Key (Cloud Messaging API Legacy)
-# fcm.serverKey = ''
+#--------------------------------------------------------------------
+# FIREBASE CLOUD MESSAGING (FCM HTTP v1)
+#--------------------------------------------------------------------
+fcm.credentialsFile = 'writable/firebase/service-account.json'
+# fcm.credentialsJson = ''
+

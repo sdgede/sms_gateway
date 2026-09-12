@@ -85,38 +85,8 @@ class SmsJobModel extends Model
 
         log_message('info', "[SmsJobModel::createJob] Created SMS Job: {$jobId} to Recipient: {$recipient} (Priority: {$data['priority']})");
 
-        // Broadcast to WebSocket server if running
-        try {
-            \App\Libraries\WebSocketBroadcaster::broadcastNewJob($data);
-        } catch (\Throwable $e) {
-            // Non-blocking
-        }
-
-        // Broadcast via FCM Push to registered Android phone line(s)
-        try {
-            $phoneLineModel = new \App\Models\SmsPhoneLineModel();
-            $lines = $phoneLineModel->where('is_active', 1)->where('fcm_token IS NOT NULL')->findAll();
-            if (empty($lines)) {
-                $anyLine = $phoneLineModel->getAnyActiveToken();
-                if ($anyLine) {
-                    $lines = [$anyLine];
-                }
-            }
-
-            if (empty($lines)) {
-                log_message('warning', "[SmsJobModel::createJob] No registered active FCM phone lines found in sms_phone_lines for Job {$jobId}. Device needs to register/pair first.");
-            } else {
-                log_message('info', "[SmsJobModel::createJob] Triggering FCM push for Job {$jobId} to " . count($lines) . " registered line(s)...");
-                foreach ($lines as $line) {
-                    if (!empty($line['fcm_token'])) {
-                        log_message('info', "[SmsJobModel::createJob] Pushing to line {$line['phone_number']} (FCM: " . substr($line['fcm_token'], 0, 20) . "...)");
-                        \App\Libraries\FcmService::pushMessage($line['fcm_token'], $data['job_id']);
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            log_message('error', '[SmsJobModel] FCM push failed: ' . $e->getMessage());
-        }
+        // Dispatch job using active methods configured in .env (Firebase / SSE / WebSocket)
+        \App\Libraries\SmsDispatcher::dispatchJob($data);
 
         return [
             'job'       => $data,
