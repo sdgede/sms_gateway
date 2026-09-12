@@ -3,15 +3,21 @@
 namespace App\Controllers;
 
 use App\Libraries\FcmService;
+use App\Libraries\SmsDispatcher;
 use App\Models\SmsAuditLogModel;
 use App\Models\SmsDeliveryReportModel;
 use App\Models\SmsGatewayModel;
-use App\Models\SmsIncomingMessageModel;
 use App\Models\SmsJobModel;
 use App\Models\SmsPairingCodeModel;
 use App\Models\SmsPhoneLineModel;
 use CodeIgniter\HTTP\ResponseInterface;
 
+/**
+ * Web Dashboard Controller
+ *
+ * Provides real-time UI, statistics, pairing code management,
+ * device actions, and direct test SMS dispatching.
+ */
 class Home extends BaseController
 {
     protected SmsGatewayModel $gatewayModel;
@@ -20,7 +26,6 @@ class Home extends BaseController
     protected SmsDeliveryReportModel $reportModel;
     protected SmsAuditLogModel $auditLogModel;
     protected SmsPhoneLineModel $phoneLineModel;
-    protected SmsIncomingMessageModel $incomingModel;
 
     public function __construct()
     {
@@ -30,11 +35,11 @@ class Home extends BaseController
         $this->reportModel = new SmsDeliveryReportModel();
         $this->auditLogModel = new SmsAuditLogModel();
         $this->phoneLineModel = new SmsPhoneLineModel();
-        $this->incomingModel = new SmsIncomingMessageModel();
     }
 
     /**
-     * Dashboard & Test UI
+     * Render the main dashboard web interface
+     * GET /
      */
     public function index(): ResponseInterface
     {
@@ -42,16 +47,16 @@ class Home extends BaseController
     }
 
     /**
-     * Fetch Live Data for UI Polling
+     * Fetch Live Data for Dashboard Polling (every 3 seconds)
      * GET /web/data
      */
     public function getLiveData(): ResponseInterface
     {
-        // 1. Gateways with computed online/offline status
+        // 1. Android Gateway Devices with computed online/offline status
         $gateways = $this->gatewayModel->orderBy('id', 'DESC')->findAll();
         $now = time();
         foreach ($gateways as &$gw) {
-            unset($gw['token_hash']);
+            unset($gw['token_hash']); // Security: Never expose token hashes to UI
             if ($gw['status'] !== 'DISABLED') {
                 if (!empty($gw['last_seen_at'])) {
                     $lastSeenSecs = $now - strtotime($gw['last_seen_at']);
@@ -67,14 +72,14 @@ class Home extends BaseController
             }
         }
 
-        // 2. Pairing Codes
+        // 2. Active & Recent Pairing Codes
         $pairingCodes = $this->pairingModel->orderBy('id', 'DESC')->findAll(10);
         foreach ($pairingCodes as &$code) {
             $code['is_expired'] = false;
             $code['status_label'] = $code['is_used'] ? 'USED' : 'ACTIVE';
         }
 
-        // 3. SMS Jobs (latest 50)
+        // 3. SMS Jobs Queue (Latest 50 entries)
         $jobs = $this->jobModel->orderBy('id', 'DESC')->findAll(50);
 
         // 4. Phone Lines (Registered FCM SIM Lines)
@@ -85,23 +90,17 @@ class Home extends BaseController
             $pl['updated_human'] = !empty($pl['updated_at']) ? date('d M H:i', strtotime($pl['updated_at'])) : '-';
         }
 
-        // 5. Incoming SMS (Inbox latest 50)
-        $incomingMessages = $this->incomingModel->orderBy('id', 'DESC')->findAll(50);
-        foreach ($incomingMessages as &$inc) {
-            $inc['received_human'] = !empty($inc['received_at']) ? date('d M H:i:s', strtotime($inc['received_at'])) : '-';
-        }
-
-        // 6. FCM Service Config Status & Dispatcher Methods
+        // 5. Active Dispatcher Configuration & Methods
         $fcmStatus = FcmService::getConfigStatus();
-        $dispatcherMethods = \App\Libraries\SmsDispatcher::getActiveMethods();
-        $dispatcherLabels = \App\Libraries\SmsDispatcher::getActiveMethodLabels();
+        $dispatcherMethods = SmsDispatcher::getActiveMethods();
+        $dispatcherLabels = SmsDispatcher::getActiveMethodLabels();
 
-        // 7. Aggregate Stats
+        // 6. Aggregate Queue Statistics
         $stats = $this->jobModel->getStatistics();
+        $stats['total_jobs'] = $stats['total'] ?? 0;
         $stats['gateways_count'] = count($gateways);
         $stats['gateways_online'] = count(array_filter($gateways, fn($g) => ($g['computed_status'] ?? '') === 'ONLINE'));
         $stats['phone_lines_count'] = count($phoneLines);
-        $stats['incoming_count'] = $this->incomingModel->countAllResults();
 
         return $this->response->setJSON([
             'status' => 'success',
@@ -110,7 +109,6 @@ class Home extends BaseController
                 'gateways'           => $gateways,
                 'pairing_codes'      => $pairingCodes,
                 'phone_lines'        => $phoneLines,
-                'incoming_messages'  => $incomingMessages,
                 'jobs'               => $jobs,
                 'fcm_status'         => $fcmStatus,
                 'dispatcher_methods' => $dispatcherMethods,
@@ -121,7 +119,7 @@ class Home extends BaseController
     }
 
     /**
-     * Web UI: Generate Pairing Code
+     * Web UI: Generate a new One-Time Pairing Code
      * POST /web/pairing/generate
      */
     public function generatePairing(): ResponseInterface
@@ -178,7 +176,7 @@ class Home extends BaseController
     }
 
     /**
-     * Web UI: Send Test SMS
+     * Web UI: Enqueue & Dispatch Test SMS
      * POST /web/sms/send
      */
     public function sendTestSms(): ResponseInterface
@@ -199,7 +197,7 @@ class Home extends BaseController
         if (empty($recipient) || empty($message)) {
             return $this->response->setStatusCode(422)->setJSON([
                 'status'  => 'error',
-                'message' => 'Recipient and message cannot be empty.',
+                'message' => 'Nomor tujuan dan isi pesan tidak boleh kosong.',
             ]);
         }
 
@@ -224,13 +222,13 @@ class Home extends BaseController
 
         return $this->response->setJSON([
             'status'  => 'success',
-            'message' => $result['is_replay'] ? 'Existing SMS job retrieved (Idempotent)' : 'SMS queued successfully!',
+            'message' => $result['is_replay'] ? 'Pesan SMS dengan ID ini sudah ada (Idempotent)' : 'Pesan SMS berhasil dimasukkan ke antrean!',
             'data'    => $result['job'],
         ]);
     }
 
     /**
-     * Web UI: Gateway Actions (Toggle Status / Revoke)
+     * Web UI: Device Management Actions (enable, disable, revoke, delete)
      * POST /web/gateway/action
      */
     public function gatewayAction(): ResponseInterface
@@ -248,7 +246,7 @@ class Home extends BaseController
         if (!$gateway) {
             return $this->response->setStatusCode(404)->setJSON([
                 'status'  => 'error',
-                'message' => 'Gateway not found',
+                'message' => 'Perangkat gateway tidak ditemukan.',
             ]);
         }
 
@@ -267,7 +265,7 @@ class Home extends BaseController
             $msg = "Perangkat {$gateway['device_name']} diaktifkan (menunggu heartbeat).";
         } elseif ($action === 'delete') {
             $this->gatewayModel->delete($gateway['id']);
-            // Also delete associated FCM phone lines
+            // Cascade delete associated FCM phone lines
             if (!empty($gateway['phone_number'])) {
                 $this->phoneLineModel->where('phone_number', $gateway['phone_number'])->delete();
             }
@@ -277,7 +275,7 @@ class Home extends BaseController
         } else {
             return $this->response->setStatusCode(400)->setJSON([
                 'status'  => 'error',
-                'message' => 'Invalid action',
+                'message' => 'Aksi gateway tidak valid.',
             ]);
         }
 
@@ -288,7 +286,7 @@ class Home extends BaseController
     }
 
     /**
-     * Web UI: Requeue / Retry SMS Job immediately (Reset to PENDING)
+     * Web UI: Requeue / Retry SMS Job immediately (Reset to PENDING & trigger push)
      * POST /web/sms/requeue
      */
     public function requeueSms(): ResponseInterface
@@ -322,7 +320,7 @@ class Home extends BaseController
         log_message('info', "[Home::requeueSms] Job {$jobId} reset to PENDING. Triggering dispatch...");
 
         // Dispatch job using active methods configured in .env (Firebase / SSE / WebSocket)
-        \App\Libraries\SmsDispatcher::dispatchJob($job);
+        SmsDispatcher::dispatchJob($job);
 
         $this->auditLogModel->log(
             actorType: 'ADMIN',
@@ -343,7 +341,11 @@ class Home extends BaseController
      */
     public function deleteSms(): ResponseInterface
     {
-        $jobId = trim($this->request->getPost('job_id') ?? '');
+        $jobId = trim($this->request->getVar('job_id') ?? '');
+        if (empty($jobId)) {
+            $json = $this->request->getJSON(true) ?? [];
+            $jobId = trim($json['job_id'] ?? '');
+        }
         $job = $this->jobModel->findByJobId($jobId);
 
         if (!$job) {
@@ -363,18 +365,22 @@ class Home extends BaseController
     }
 
     /**
-     * Web UI: Delete Phone Line
+     * Web UI: Delete Registered Phone Line / FCM Token
      * POST /web/phone-line/delete
      */
     public function deletePhoneLine(): ResponseInterface
     {
-        $id = trim($this->request->getPost('id') ?? '');
+        $id = trim($this->request->getVar('id') ?? '');
+        if (empty($id)) {
+            $json = $this->request->getJSON(true) ?? [];
+            $id = trim($json['id'] ?? '');
+        }
         $line = $this->phoneLineModel->find($id);
 
         if (!$line) {
             return $this->response->setStatusCode(404)->setJSON([
                 'status'  => 'error',
-                'message' => 'Phone line not found.',
+                'message' => 'SIM Line tidak ditemukan.',
             ]);
         }
 
@@ -382,31 +388,28 @@ class Home extends BaseController
 
         return $this->response->setJSON([
             'status'  => 'success',
-            'message' => "Phone line {$line['phone_number']} deleted.",
+            'message' => "SIM Line {$line['phone_number']} berhasil dihapus.",
         ]);
     }
 
     /**
-     * Web UI: Delete Incoming SMS
-     * POST /web/incoming/delete
+     * Web UI: Manually Run Queue Maintenance Worker
+     * POST /web/worker/run
      */
-    public function deleteIncoming(): ResponseInterface
+    public function runWorker(): ResponseInterface
     {
-        $id = trim($this->request->getPost('id') ?? '');
-        $msg = $this->incomingModel->find($id);
+        $recovered = $this->jobModel->recoverStaleClaims();
+        $retried = $this->jobModel->processRetries();
 
-        if (!$msg) {
-            return $this->response->setStatusCode(404)->setJSON([
-                'status'  => 'error',
-                'message' => 'Incoming message not found.',
-            ]);
-        }
-
-        $this->incomingModel->delete($id);
+        $msg = "Worker maintenance selesai: {$recovered} job stale di-recover, {$retried} job retry dirilis ke PENDING.";
 
         return $this->response->setJSON([
             'status'  => 'success',
-            'message' => 'Incoming message deleted.',
+            'message' => $msg,
+            'data'    => [
+                'recovered_claims' => $recovered,
+                'released_retries' => $retried,
+            ],
         ]);
     }
 }

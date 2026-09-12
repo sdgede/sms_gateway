@@ -904,12 +904,10 @@
         setElText('statPending', pending);
         setElText('statPendingSub', `${stats.pending || 0} pending, ${stats.sending || 0} sending`);
 
-        setElText('statPhoneLines', data.stats.phone_lines_count || (data.phone_lines || []).length);
-        setElText('statIncoming', data.stats.incoming_count || (data.incoming_messages || []).length);
+        setElText('statPhoneLines', (data.stats && data.stats.phone_lines_count) || (data.phone_lines || []).length);
 
         // Tab Badges
         setElText('tabBadgeQueue', (data.jobs || []).length);
-        setElText('tabBadgeInbox', (data.incoming_messages || []).length);
         setElText('tabBadgeLines', (data.phone_lines || []).length);
         setElText('tabBadgeDevices', (data.gateways || []).length);
 
