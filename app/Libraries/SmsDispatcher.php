@@ -102,26 +102,51 @@ class SmsDispatcher
 
         $jobId = $job['job_id'] ?? '';
 
-        // 1. Firebase FCM Push (HTTP v1)
+        // 1. Firebase FCM Push (HTTP v1) - Single Target Device Dispatch
         if ($methods['firebase']) {
             try {
                 $phoneLineModel = new SmsPhoneLineModel();
-                $lines = $phoneLineModel->where('is_active', 1)->where('fcm_token IS NOT NULL')->findAll();
-                if (empty($lines)) {
-                    $anyLine = $phoneLineModel->getAnyActiveToken();
-                    if ($anyLine) {
-                        $lines = [$anyLine];
-                    }
+                $jobModel = new \App\Models\SmsJobModel();
+                $targetDev = $job['target_device_id'] ?? $job['assigned_device_id'] ?? null;
+
+                $selectedLine = null;
+                if (!empty($targetDev)) {
+                    // Match specific requested device or phone number
+                    $selectedLine = $phoneLineModel->where('is_active', 1)
+                        ->groupStart()
+                            ->where('phone_number', $targetDev)
+                            ->orWhere('id', $targetDev)
+                        ->groupEnd()
+                        ->where('fcm_token IS NOT NULL')
+                        ->first();
                 }
 
-                if (!empty($lines)) {
-                    log_message('info', "[SmsDispatcher] [Method: Firebase] Triggering FCM push for Job {$jobId} to " . count($lines) . " line(s)...");
-                    foreach ($lines as $line) {
-                        if (!empty($line['fcm_token'])) {
-                            log_message('info', "[SmsDispatcher] [Method: Firebase] Pushing to line {$line['phone_number']} (FCM: " . substr($line['fcm_token'], 0, 20) . "...)");
-                            FcmService::pushMessage($line['fcm_token'], $jobId);
-                        }
+                if (!$selectedLine) {
+                    // Pick the single best active line (most recently updated with valid FCM)
+                    $selectedLine = $phoneLineModel->where('is_active', 1)
+                        ->where('fcm_token IS NOT NULL')
+                        ->where('fcm_token !=', '')
+                        ->orderBy('updated_at', 'DESC')
+                        ->first();
+                }
+
+                if (!$selectedLine) {
+                    $selectedLine = $phoneLineModel->getAnyActiveToken();
+                }
+
+                if ($selectedLine && !empty($selectedLine['fcm_token'])) {
+                    $assignedId = $selectedLine['phone_number'] ?: $selectedLine['id'];
+                    log_message('info', "[SmsDispatcher] [Method: Firebase] Dispatching Job {$jobId} to SINGLE target line: {$assignedId} (FCM: " . substr($selectedLine['fcm_token'], 0, 20) . "...)");
+                    
+                    // Pre-assign device to the job record so dashboard displays it immediately
+                    if (!empty($job['id'])) {
+                        $jobModel->update($job['id'], [
+                            'assigned_device_id' => $assignedId,
+                            'updated_at'         => date('Y-m-d H:i:s'),
+                        ]);
                     }
+
+                    FcmService::pushMessage($selectedLine['fcm_token'], $jobId);
                     $dispatched['firebase'] = true;
                 } else {
                     log_message('warning', "[SmsDispatcher] [Method: Firebase] No active FCM line found for Job {$jobId}. Device needs pairing.");

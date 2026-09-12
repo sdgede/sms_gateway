@@ -98,12 +98,22 @@ class HttpSmsController extends BaseController
         $userId = 'usr_' . substr(md5(env('app.smsApiKey', 'sms_key')), 0, 12);
         $line = $this->phoneLineModel->registerLine($phoneNumber, $sim, $fcmToken, $userId);
 
-        // Also update / register gateway device in sms_gateways (Single SIM)
-        $deviceId = 'dev_' . preg_replace('/[^a-zA-Z0-9]/', '', $phoneNumber);
-        $existingGw = $this->gatewayModel->findByDeviceId($deviceId);
+        // Update or register single gateway device in sms_gateways without creating duplicates
+        $existingGw = null;
+        if (!empty($this->request->authenticatedGateway)) {
+            $existingGw = $this->request->authenticatedGateway;
+        }
+        if (!$existingGw) {
+            $existingGw = $this->gatewayModel->where('phone_number', $phoneNumber)->first();
+        }
+        if (!$existingGw) {
+            $existingGw = $this->gatewayModel->where('device_id', 'dev_' . preg_replace('/[^a-zA-Z0-9]/', '', $phoneNumber))->first();
+        }
+
+        $deviceId = $existingGw['device_id'] ?? ('dev_' . preg_replace('/[^a-zA-Z0-9]/', '', $phoneNumber));
         $gwData = [
             'device_id'     => $deviceId,
-            'device_name'   => "Android Gateway ({$phoneNumber})",
+            'device_name'   => $existingGw['device_name'] ?? "Android Gateway ({$phoneNumber})",
             'status'        => 'ONLINE',
             'phone_number'  => $phoneNumber,
             'sim_slot'      => 1,
@@ -164,8 +174,30 @@ class HttpSmsController extends BaseController
             ]);
         }
 
+        // Identify device and update attempt & assigned_device_id
+        $assignedDev = $job['assigned_device_id'];
+        if (empty($assignedDev)) {
+            $gw = $this->gatewayModel->where('status !=', 'DISABLED')->orderBy('last_seen_at', 'DESC')->first();
+            if ($gw) {
+                $assignedDev = $gw['phone_number'] ?: $gw['device_id'];
+            } else {
+                $assignedDev = 'Android Gateway';
+            }
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $newAttempt = max(1, (int)($job['attempt'] ?? 0) + 1);
+
+        $this->jobModel->update($job['id'], [
+            'status'             => SmsJobModel::STATUS_SENDING,
+            'attempt'            => $newAttempt,
+            'assigned_device_id' => $assignedDev,
+            'claimed_at'         => $now,
+            'updated_at'         => $now,
+        ]);
+
         $createdAtIso = $this->formatIsoUtc($job['created_at'] ?? null);
-        $updatedAtIso = $this->formatIsoUtc($job['updated_at'] ?? null);
+        $updatedAtIso = $this->formatIsoUtc($now);
         $sentAtIso = !empty($job['sent_at']) ? $this->formatIsoUtc($job['sent_at']) : null;
         $deliveredAtIso = !empty($job['delivered_at']) ? $this->formatIsoUtc($job['delivered_at']) : null;
 
@@ -173,8 +205,8 @@ class HttpSmsController extends BaseController
             'id'                  => $job['job_id'],
             'contact'             => $job['recipient'],
             'content'             => $job['message'],
-            'sim'                 => 'SIM1', // Default SIM1 or from job metadata
-            'owner'               => $job['assigned_device_id'] ?? '',
+            'sim'                 => 'SIM1',
+            'owner'               => $assignedDev,
             'encrypted'           => false,
             'status'              => 'outstanding',
             'type'                => 'sms',
@@ -183,14 +215,14 @@ class HttpSmsController extends BaseController
             'request_received_at' => $createdAtIso,
             'updated_at'          => $updatedAtIso,
             'failure_reason'      => $job['failed_reason'] ?? null,
-            'last_attempted_at'   => null,
+            'last_attempted_at'   => $updatedAtIso,
             'received_at'         => null,
             'sent_at'             => $sentAtIso,
             'send_time'           => null,
             'attachments'         => [],
         ];
 
-        log_message('info', "[HttpSms::getOutstandingMessage] Dispatched message payload to mobile: ID {$job['job_id']} -> Recipient: {$job['recipient']} (Content: " . substr($job['message'], 0, 30) . "...)");
+        log_message('info', "[HttpSms::getOutstandingMessage] Dispatched message payload to mobile: ID {$job['job_id']} (Attempt: {$newAttempt}) -> Device: {$assignedDev}");
 
         return $this->response->setStatusCode(200)->setJSON([
             'data'    => $responseMessage,
@@ -217,7 +249,6 @@ class HttpSmsController extends BaseController
         $job = $this->jobModel->findByIdOrClientId($messageId);
         if (!$job) {
             log_message('notice', "[HttpSms::recordMessageEvent] Message {$messageId} not in DB (already deleted or archived). Returning 200 OK.");
-            // Per contract: 404 is considered success by app (message already deleted/done)
             return $this->response->setStatusCode(200)->setJSON([
                 'data'    => null,
                 'message' => 'ok',
@@ -226,25 +257,40 @@ class HttpSmsController extends BaseController
         }
 
         $now = date('Y-m-d H:i:s');
+        $assignedDev = $job['assigned_device_id'];
+        if (empty($assignedDev)) {
+            $gw = $this->gatewayModel->where('status !=', 'DISABLED')->orderBy('last_seen_at', 'DESC')->first();
+            $assignedDev = $gw ? ($gw['phone_number'] ?: $gw['device_id']) : 'Android Gateway';
+        }
+
+        $currentAttempt = max(1, (int)($job['attempt'] ?? 0));
+
         if ($eventName === 'SENT') {
             $this->jobModel->update($job['id'], [
-                'status'     => SmsJobModel::STATUS_SENT,
-                'sent_at'    => $now,
-                'updated_at' => $now,
+                'status'             => SmsJobModel::STATUS_SENT,
+                'attempt'            => $currentAttempt,
+                'assigned_device_id' => $assignedDev,
+                'sent_at'            => $now,
+                'updated_at'         => $now,
             ]);
-            log_message('info', "[HttpSms::recordMessageEvent] Job {$job['job_id']} updated to STATUS_SENT");
+            log_message('info', "[HttpSms::recordMessageEvent] Job {$job['job_id']} updated to STATUS_SENT (Device: {$assignedDev}, Attempt: {$currentAttempt})");
         } elseif ($eventName === 'DELIVERED') {
             $this->jobModel->update($job['id'], [
-                'status'       => SmsJobModel::STATUS_DELIVERED,
-                'delivered_at' => $now,
-                'updated_at'   => $now,
+                'status'             => SmsJobModel::STATUS_DELIVERED,
+                'attempt'            => $currentAttempt,
+                'assigned_device_id' => $assignedDev,
+                'delivered_at'       => $now,
+                'updated_at'         => $now,
             ]);
-            log_message('info', "[HttpSms::recordMessageEvent] Job {$job['job_id']} updated to STATUS_DELIVERED");
+            log_message('info', "[HttpSms::recordMessageEvent] Job {$job['job_id']} updated to STATUS_DELIVERED (Device: {$assignedDev}, Attempt: {$currentAttempt})");
         } elseif ($eventName === 'FAILED') {
+            $newAttempt = $currentAttempt + 1;
             $this->jobModel->update($job['id'], [
-                'status'        => SmsJobModel::STATUS_FAILED,
-                'failed_reason' => $reason ?? 'Generic failure',
-                'updated_at'    => $now,
+                'status'             => SmsJobModel::STATUS_FAILED,
+                'attempt'            => $newAttempt,
+                'assigned_device_id' => $assignedDev,
+                'failed_reason'      => $reason ?? 'Generic failure',
+                'updated_at'         => $now,
             ]);
             log_message('warning', "[HttpSms::recordMessageEvent] Job {$job['job_id']} updated to STATUS_FAILED (Reason: {$reason})");
         }
@@ -252,7 +298,7 @@ class HttpSmsController extends BaseController
         // Record Delivery Report
         $this->reportModel->recordReport([
             'job_id'                  => $job['job_id'],
-            'device_id'               => $job['assigned_device_id'] ?? 'ANDROID_FCM',
+            'device_id'               => $assignedDev,
             'status'                  => $eventName,
             'operator_status_code'    => $eventName,
             'operator_status_message' => $reason,
@@ -281,16 +327,21 @@ class HttpSmsController extends BaseController
         $primaryPhone = !empty($phoneNumbers[0]) ? $phoneNumbers[0] : null;
         $battery = $raw['battery_level'] ?? '-';
         $charging = !empty($raw['is_charging']) ? 'Yes' : 'No';
-        $carrier = $raw['sim_carrier'] ?? 'Unknown';
+        $carrier = $raw['sim_carrier'] ?? 'TELKOMSEL';
 
         log_message('info', "[HttpSms::recordHeartbeat] Device '{$deviceId}' Heartbeat from IP {$this->request->getIPAddress()} | Phone: {$primaryPhone} | Carrier: {$carrier} | Battery: {$battery}% (Charging: {$charging})");
 
+        // Find existing record by deviceId OR by phone number to prevent duplicates
         $existing = $this->gatewayModel->findByDeviceId($deviceId);
+        if (!$existing && !empty($primaryPhone)) {
+            $existing = $this->gatewayModel->where('phone_number', $primaryPhone)->first();
+        }
+
         $gwData = [
             'device_id'       => $deviceId,
-            'device_name'     => !empty($raw['sim_carrier']) ? "Android ({$raw['sim_carrier']})" : "Android Gateway",
+            'device_name'     => !empty($carrier) ? "Android ({$carrier})" : ($existing['device_name'] ?? "Android Gateway"),
             'status'          => 'ONLINE',
-            'sim_operator'    => $raw['sim_carrier'] ?? null,
+            'sim_operator'    => $carrier,
             'phone_number'    => $primaryPhone ?? ($existing['phone_number'] ?? null),
             'battery_level'   => isset($raw['battery_level']) ? (int)$raw['battery_level'] : null,
             'is_charging'     => !empty($raw['is_charging']) ? 1 : 0,
@@ -300,6 +351,13 @@ class HttpSmsController extends BaseController
 
         if ($existing) {
             $this->gatewayModel->update($existing['id'], $gwData);
+            // Clean up any stale duplicate offline rows for this phone number
+            if (!empty($primaryPhone)) {
+                $this->gatewayModel->where('phone_number', $primaryPhone)
+                    ->where('id !=', $existing['id'])
+                    ->where('status', 'OFFLINE')
+                    ->delete();
+            }
         } else {
             $this->gatewayModel->insert($gwData);
         }

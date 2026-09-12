@@ -164,13 +164,18 @@ class SmsJobModel extends Model
     public function markAsSending(string $jobId, string $deviceId): bool
     {
         $job = $this->findByJobId($jobId);
-        if (!$job || $job['assigned_device_id'] !== $deviceId) {
+        if (!$job) {
             return false;
         }
 
+        $now = date('Y-m-d H:i:s');
+        $attempt = max(1, (int)($job['attempt'] ?? 0) + 1);
+
         return $this->update($job['id'], [
-            'status'     => self::STATUS_SENDING,
-            'updated_at' => date('Y-m-d H:i:s'),
+            'status'             => self::STATUS_SENDING,
+            'attempt'            => $attempt,
+            'assigned_device_id' => $deviceId,
+            'updated_at'         => $now,
         ]);
     }
 
@@ -185,8 +190,11 @@ class SmsJobModel extends Model
         }
 
         $now = date('Y-m-d H:i:s');
+        $attempt = max(1, (int)($job['attempt'] ?? 0));
+
         return $this->update($job['id'], [
             'status'             => self::STATUS_SENT,
+            'attempt'            => $attempt,
             'sent_at'            => $now,
             'assigned_device_id' => $deviceId,
             'updated_at'         => $now,
@@ -204,10 +212,14 @@ class SmsJobModel extends Model
         }
 
         $now = date('Y-m-d H:i:s');
+        $attempt = max(1, (int)($job['attempt'] ?? 0));
+
         return $this->update($job['id'], [
-            'status'       => self::STATUS_DELIVERED,
-            'delivered_at' => $now,
-            'updated_at'   => $now,
+            'status'             => self::STATUS_DELIVERED,
+            'attempt'            => $attempt,
+            'assigned_device_id' => $deviceId,
+            'delivered_at'       => $now,
+            'updated_at'         => $now,
         ]);
     }
 

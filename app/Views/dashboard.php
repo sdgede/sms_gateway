@@ -532,6 +532,7 @@
     </header>
 
     <!-- Top Stats -->
+    <!-- Top Stats (5 Cards) -->
     <div class="stats-grid">
         <div class="stat-card">
             <div class="stat-label">Gateways Online</div>
@@ -554,14 +555,9 @@
             <div class="stat-sub" id="statPendingSub">0 pending, 0 sending</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">SIM Lines (FCM)</div>
+            <div class="stat-label">SIM Lines & FCM</div>
             <div class="stat-value" style="color: #818cf8;" id="statPhoneLines">0</div>
             <div class="stat-sub">Registered SIMs</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">SMS Masuk (Inbox)</div>
-            <div class="stat-value" style="color: var(--info);" id="statIncoming">0</div>
-            <div class="stat-sub">Total received</div>
         </div>
     </div>
 
@@ -670,13 +666,10 @@
         <!-- Right Column: Tabs & Monitoring Tables -->
         <div>
             <div class="panel">
-                <!-- Navigation Tabs -->
+                <!-- Navigation Tabs (3 Tabs) -->
                 <div class="tab-nav">
                     <button class="tab-btn active" onclick="switchTab('queue')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 6px;"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg> Antrean SMS <span class="tab-badge" id="tabBadgeQueue">0</span>
-                    </button>
-                    <button class="tab-btn" onclick="switchTab('inbox')">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 6px;"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg> SMS Masuk (Inbox) <span class="tab-badge" id="tabBadgeInbox">0</span>
                     </button>
                     <button class="tab-btn" onclick="switchTab('lines')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 6px;"><path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z"/><path d="M9 10v4"/><path d="M15 10v4"/><path d="M9 14h6"/></svg> SIM Lines & FCM <span class="tab-badge" id="tabBadgeLines">0</span>
@@ -719,37 +712,7 @@
                     </div>
                 </div>
 
-                <!-- Tab 2: Incoming SMS Inbox -->
-                <div id="tabPaneInbox" class="tab-pane">
-                    <div class="panel-header" style="margin-bottom: 12px; border: none; padding: 0;">
-                        <div style="font-size: 13px; font-weight: 600; color: var(--text-muted);">
-                            Pesan Masuk yang Diterima oleh HP Gateway
-                        </div>
-                    </div>
-                    <div class="table-responsive">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>ID / Ref</th>
-                                    <th>Pengirim (From)</th>
-                                    <th>SIM / Nomor Gateway</th>
-                                    <th>Isi Pesan SMS</th>
-                                    <th>Waktu Diterima</th>
-                                    <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody id="inboxTableBody">
-                                <tr>
-                                    <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 24px;">
-                                        Belum ada SMS masuk.
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Tab 3: Registered SIM Lines & FCM -->
+                <!-- Tab 2: Registered SIM Lines & FCM -->
                 <div id="tabPaneLines" class="tab-pane">
                     <div class="panel-header" style="margin-bottom: 12px; border: none; padding: 0;">
                         <div style="font-size: 13px; font-weight: 600; color: var(--text-muted);">
@@ -834,7 +797,7 @@
         if (el) el.innerHTML = val;
     }
 
-    // Tab Switching
+    // Tab Switching (3 Tabs)
     function switchTab(tabId) {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -842,14 +805,11 @@
         if (tabId === 'queue') {
             document.querySelector('.tab-btn:nth-child(1)')?.classList.add('active');
             document.getElementById('tabPaneQueue')?.classList.add('active');
-        } else if (tabId === 'inbox') {
-            document.querySelector('.tab-btn:nth-child(2)')?.classList.add('active');
-            document.getElementById('tabPaneInbox')?.classList.add('active');
         } else if (tabId === 'lines') {
-            document.querySelector('.tab-btn:nth-child(3)')?.classList.add('active');
+            document.querySelector('.tab-btn:nth-child(2)')?.classList.add('active');
             document.getElementById('tabPaneLines')?.classList.add('active');
         } else if (tabId === 'devices') {
-            document.querySelector('.tab-btn:nth-child(4)')?.classList.add('active');
+            document.querySelector('.tab-btn:nth-child(3)')?.classList.add('active');
             document.getElementById('tabPaneDevices')?.classList.add('active');
         }
     }
@@ -1157,37 +1117,6 @@
                     <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 24px;">
                         Belum ada SMS masuk yang diterima.
                     </td>
-                </tr>
-            `;
-        } else {
-            inboxTbody.innerHTML = data.incoming_messages.map(m => `
-                <tr>
-                    <td>
-                        <div class="mono-tag" style="color: var(--info); font-weight: 600;">${escapeHtml(m.message_id)}</div>
-                    </td>
-                    <td>
-                        <div style="font-weight: 600; font-family: var(--font-mono); color: #38bdf8;">
-                            ${escapeHtml(m.sender_phone)}
-                        </div>
-                    </td>
-                    <td>
-                        <div>${escapeHtml(m.recipient_phone || '-')}</div>
-                        <div class="mono-tag">${escapeHtml(m.sim || 'SIM_1')}</div>
-                    </td>
-                    <td style="max-width: 250px; white-space: normal;" title="${escapeHtml(m.message)}">
-                        ${escapeHtml(m.message)}
-                    </td>
-                    <td>
-                        <div style="font-size: 12px;">${m.received_human || m.received_at || '-'}</div>
-                    </td>
-                    <td>
-                        <button class="btn btn-danger-subtle btn-sm" style="padding: 4px 8px; font-size: 11px; display: inline-flex; align-items: center;" title="Hapus SMS Masuk" onclick="handleDeleteIncoming('${m.id}')">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
-        }
     }
 
     // Set Message Presets
@@ -1450,31 +1379,6 @@
             formData.append('id', id);
 
             const res = await fetch(`${BASE_URL}/web/phone-line/delete`, {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await res.json();
-            if (result.status === 'success') {
-                showToast(result.message, 'success');
-                fetchLiveData();
-            } else {
-                showToast(result.message, 'error');
-            }
-        } catch (err) {
-            showToast(err.message, 'error');
-        }
-    }
-
-    // Delete Incoming SMS
-    async function handleDeleteIncoming(id) {
-        if (!confirm('Hapus pesan masuk ini?')) return;
-
-        try {
-            const formData = new FormData();
-            formData.append('id', id);
-
-            const res = await fetch(`${BASE_URL}/web/incoming/delete`, {
                 method: 'POST',
                 body: formData
             });

@@ -254,16 +254,26 @@ class Home extends BaseController
 
         if ($action === 'revoke') {
             $this->gatewayModel->revokeToken($deviceId);
-            $msg = "Token for device {$gateway['device_name']} revoked.";
+            if (!empty($gateway['phone_number'])) {
+                $this->phoneLineModel->where('phone_number', $gateway['phone_number'])->delete();
+            }
+            $this->phoneLineModel->where('id', $deviceId)->delete();
+            $msg = "Token dan FCM untuk perangkat {$gateway['device_name']} berhasil di-revoke.";
         } elseif ($action === 'disable') {
             $this->gatewayModel->update($gateway['id'], ['status' => 'DISABLED']);
-            $msg = "Device {$gateway['device_name']} disabled.";
+            $msg = "Perangkat {$gateway['device_name']} dinonaktifkan.";
         } elseif ($action === 'enable') {
             $this->gatewayModel->update($gateway['id'], ['status' => 'OFFLINE']);
-            $msg = "Device {$gateway['device_name']} enabled (waiting for heartbeat).";
+            $msg = "Perangkat {$gateway['device_name']} diaktifkan (menunggu heartbeat).";
         } elseif ($action === 'delete') {
             $this->gatewayModel->delete($gateway['id']);
-            $msg = "Device {$gateway['device_name']} deleted.";
+            // Also delete associated FCM phone lines
+            if (!empty($gateway['phone_number'])) {
+                $this->phoneLineModel->where('phone_number', $gateway['phone_number'])->delete();
+            }
+            $this->phoneLineModel->where('id', $deviceId)->delete();
+            $this->phoneLineModel->where('phone_number', $deviceId)->delete();
+            $msg = "Perangkat {$gateway['device_name']} dan token FCM terkait berhasil dihapus.";
         } else {
             return $this->response->setStatusCode(400)->setJSON([
                 'status'  => 'error',

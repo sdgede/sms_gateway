@@ -90,9 +90,11 @@ final class HttpSmsApiTest extends CIUnitTestCase
         $sentJson = json_decode($sentEvent->getJSON(), true);
         $this->assertEquals('success', $sentJson['status']);
 
-        // Verify status updated to SENT
+        // Verify status updated to SENT, attempt incremented, and device assigned
         $updatedJob = $jobModel->findByJobId($messageId);
         $this->assertEquals(SmsJobModel::STATUS_SENT, $updatedJob['status']);
+        $this->assertGreaterThanOrEqual(1, (int)$updatedJob['attempt']);
+        $this->assertNotEmpty($updatedJob['assigned_device_id']);
 
         // 6. Test Event Reporting: POST /v1/messages/{id}/events (DELIVERED)
         $delivEvent = $this->withHeaders(['x-api-key' => $this->apiKey])
@@ -104,6 +106,8 @@ final class HttpSmsApiTest extends CIUnitTestCase
         $delivEvent->assertStatus(200);
         $delivJob = $jobModel->findByJobId($messageId);
         $this->assertEquals(SmsJobModel::STATUS_DELIVERED, $delivJob['status']);
+        $this->assertGreaterThanOrEqual(1, (int)$delivJob['attempt']);
+        $this->assertNotEmpty($delivJob['assigned_device_id']);
 
         // 7. Test Heartbeat: POST /v1/heartbeats
         $heartbeatResult = $this->withHeaders(['x-api-key' => $this->apiKey])
