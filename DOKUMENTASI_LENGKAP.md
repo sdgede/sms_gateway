@@ -1,635 +1,646 @@
-# SMS Gateway Backend — Dokumentasi Lengkap & Panduan Integrasi
+# SMS Gateway Backend — Dokumentasi Lengkap, ERD & Alur Kerja Sistem
 
-Dokumentasi komprehensif untuk sistem **SMS Gateway Backend** berbasis **CodeIgniter 4**, **Firebase Cloud Messaging (FCM HTTP v1)**, dan aplikasi **Android Gateway Client** (`com.sevanam.androidsmsgateway` / `com.httpsms`) serta integrasi REST API untuk aplikasi pihak ketiga (Laravel, NodeJS, POS, E-commerce, Python, dll.).
+Dokumentasi komprehensif arsitektur, **Entity Relationship Diagram (ERD)**, **Flowchart Alur Sistem**, panduan konfigurasi database (MySQL / SQLite), serta referensi **REST API** untuk sistem **SMS Gateway Backend** berbasis **CodeIgniter 4**, **Google Firebase Cloud Messaging (FCM HTTP v1)**, **Server-Sent Events (SSE)**, **WebSocket**, dan aplikasi **Android Gateway Client** (`com.httpsms` / `com.sevanam.androidsmsgateway`).
 
 ---
 
 ## Daftar Isi
 
-1. [Arsitektur Sistem & Alur Kerja](#1-arsitektur-sistem--alur-kerja)
-2. [Spesifikasi Teknis & Persyaratan Server](#2-spesifikasi-teknis--persyaratan-server)
-3. [Panduan Instalasi & Setup Server](#3-panduan-instalasi--setup-server)
-4. [Konfigurasi Firebase Cloud Messaging (FCM HTTP v1)](#4-konfigurasi-firebase-cloud-messaging-fcm-http-v1)
-5. [Alur Pairing Android (Mode Single SIM: 1 Provider & 1 Nomor)](#5-alur-pairing-android-mode-single-sim-1-provider--1-nomor)
-6. [Dokumentasi Lengkap REST API Mobile Android](#6-dokumentasi-lengkap-rest-api-mobile-android)
-   - [A. Pairing Device (`POST /api/v1/gateway/pair`)](#a-pairing-device-post-apiv1gatewaypair)
-   - [B. Registrasi Token FCM (`PUT /api/v1/phones/fcm-token`)](#b-registrasi-token-fcm-put-apiv1phonesfcm-token)
-   - [C. Ambil Pesan untuk Dikirim (`GET /api/v1/messages/outstanding`)](#c-ambil-pesan-untuk-dikirim-get-apiv1messagesoutstanding)
-   - [D. Laporan Status Pengiriman (`POST /api/v1/messages/{id}/events`)](#d-laporan-status-pengiriman-post-apiv1messagesidevents)
-   - [E. Laporan Heartbeat / Baterai / Sinyal (`POST /api/v1/heartbeats`)](#e-laporan-heartbeat--baterai--sinyal-post-apiv1heartbeats)
-   - [F. Penerimaan SMS Masuk / Inbox (`POST /api/v1/messages/receive`)](#f-penerimaan-sms-masuk--inbox-post-apiv1messagesreceive)
-   - [G. Real-Time SSE Stream Job (`GET /api/v1/gateway/jobs/stream`)](#g-real-time-sse-stream-job-get-apiv1gatewayjobsstream)
-7. [Dokumentasi REST API untuk Server / Aplikasi Luar](#7-dokumentasi-rest-api-untuk-server--aplikasi-luar)
-   - [A. Kirim SMS Keluar (`POST /api/v1/sms/send`)](#a-kirim-sms-keluar-post-apiv1smssend)
-   - [B. Cek Status Pengiriman (`GET /api/v1/sms/status/{id}`)](#b-cek-status-pengiriman-get-apiv1smsstatusid)
-   - [C. Statistik SMS (`GET /api/v1/sms/statistics`)](#c-statistik-sms-get-apiv1smsstatistics)
-   - [D. Generate Pairing Code via API (`POST /api/v1/admin/pairing/generate`)](#d-generate-pairing-code-via-api-post-apiv1adminpairinggenerate)
-8. [Web Dashboard & Monitoring Interaktif](#8-web-dashboard--monitoring-interaktif)
-9. [Panduan Logging & Troubleshooting](#9-panduan-logging--troubleshooting)
+1. [Arsitektur Sistem & Desain Modular](#1-arsitektur-sistem--desain-modular)
+2. [Entity Relationship Diagram (ERD)](#2-entity-relationship-diagram-erd)
+3. [Flowchart & Sequence Diagram Alur Kerja](#3-flowchart--sequence-diagram-alur-kerja)
+   - [A. Flowchart Alur Pengiriman SMS End-to-End](#a-flowchart-alur-pengiriman-sms-end-to-end)
+   - [B. Flowchart Pairing Perangkat Android](#b-flowchart-pairing-perangkat-android)
+   - [C. Flowchart Queue Maintenance & Retry Backoff](#c-flowchart-queue-maintenance--retry-backoff)
+   - [D. Sequence Diagram Pengiriman SMS via FCM HTTP v1](#d-sequence-diagram-pengiriman-sms-via-fcm-http-v1)
+4. [Struktur Controller & Namespace Modular](#4-struktur-controller--namespace-modular)
+5. [Spesifikasi Teknis & Persyaratan Server](#5-spesifikasi-teknis--persyaratan-server)
+6. [Panduan Instalasi & Konfigurasi Database (MySQL / SQLite)](#6-panduan-instalasi--konfigurasi-database-mysql--sqlite)
+7. [Tiga (3) Metode Komunikasi Dispatcher (`.env`)](#7-tiga-3-metode-komunikasi-dispatcher-env)
+8. [Setup Firebase Cloud Messaging (FCM HTTP v1)](#8-setup-firebase-cloud-messaging-fcm-http-v1)
+9. [Dokumentasi Lengkap REST API](#9-dokumentasi-lengkap-rest-api)
+   - [A. Internal API (Untuk Aplikasi Backend / Microservices)](#a-internal-api-untuk-aplikasi-backend--microservices)
+   - [B. Mobile Gateway API (Kontrak com.httpsms)](#b-mobile-gateway-api-kontrak-comhttpsms)
+   - [C. Hardware & Custom Gateway Protocol API](#c-hardware--custom-gateway-protocol-api)
+10. [Contoh Kode Integrasi Klien (PHP, Node.js, Python, cURL)](#10-contoh-kode-integrasi-klien-php-nodejs-python-curl)
+11. [Web Dashboard & Monitoring Interaktif](#11-web-dashboard--monitoring-interaktif)
+12. [Troubleshooting & Solusi Error Umum](#12-troubleshooting--solusi-error-umum)
 
 ---
 
-## 1. Arsitektur Sistem & Alur Kerja
+## 1. Arsitektur Sistem & Desain Modular
 
-Sistem ini bekerja menghubungkan aplikasi backend eksternal, web dashboard, dan HP Android yang bertindak sebagai router pengirim SMS pulsa seluler.
+Sistem SMS Gateway bertindak sebagai **Transactional SMS Router** yang menjembatani aplikasi backend eksternal (Website, ERP, POS, CRM, E-Commerce) dengan perangkat Android fisik yang memiliki kartu SIM seluler aktif.
+
+```mermaid
+graph TB
+    subgraph ClientServices [Aplikasi & Layanan Luar]
+        WebApps["Website / E-Commerce"]
+        BackendAPI["Laravel / Node.js / Python API"]
+        AdminDashboard["Web Dashboard Admin"]
+    end
+
+    subgraph CoreBackend [SMS Gateway Engine - CodeIgniter 4]
+        Router["CodeIgniter 4 Routes & Filters"]
+        
+        subgraph Controllers [Modular Controllers]
+            WebCtrl["Web/DashboardController"]
+            IntCtrl["Internal/InternalSmsController"]
+            MobCtrl["Mobile/MobileApiController"]
+            GwyCtrl["Gateway/GatewayApiController"]
+        end
+        
+        Dispatcher["SmsDispatcher (Router Logika Dispatch)"]
+        JobQueue[("Database MySQL / SQLite\n(sms_jobs queue)")]
+    end
+
+    subgraph CommunicationChannels [Kanal Komunikasi Real-Time]
+        FCM["Google Firebase Cloud Messaging (HTTP v1)"]
+        SSE["Server-Sent Events (SSE Stream)"]
+        WS["WebSocket Real-Time Daemon"]
+    end
+
+    subgraph AndroidDevices [Perangkat Android SIM Gateway]
+        Android1["HP Android Gateway 01\n(Telkomsel SIM1)"]
+        Android2["HP Android Gateway 02\n(Indosat SIM1)"]
+    end
+
+    subgraph TelecomNetwork [Jaringan Operator Seluler]
+        BTS["Tower BTS Seluler (GSM/LTE)"]
+        CustomerHandset["HP Penerima SMS / Pelanggan (SMS OTP/Notifikasi)"]
+    end
+
+    ClientServices -->|POST /api/v1/sms/send| Router
+    AdminDashboard -->|Web UI Actions| WebCtrl
+    Router --> Controllers
+    IntCtrl --> JobQueue
+    JobQueue --> Dispatcher
+    
+    Dispatcher -->|Push Notification| FCM
+    Dispatcher -->|Event Stream| SSE
+    Dispatcher -->|WebSocket Broadcast| WS
+    
+    FCM -->|Silent Wakeup| Android1
+    SSE -->|Stream Job| Android1
+    WS -->|Instant Event| Android1
+    
+    Android1 -->|GET /v1/messages/outstanding| MobCtrl
+    Android1 -->|Kirim SMS Pulsa Seluler| BTS
+    BTS --> CustomerHandset
+    Android1 -->|POST /v1/messages/events (SENT/DELIVERED)| MobCtrl
+```
+
+---
+
+## 2. Entity Relationship Diagram (ERD)
+
+Database dirancang dengan skema relasional yang fleksibel, mendukung integritas idempotency, pencatatan log audit menyeluruh, dan pelacakan status pengiriman per perangkat:
+
+```mermaid
+erDiagram
+    sms_gateways ||--o{ sms_phone_lines : "memiliki SIM line"
+    sms_gateways ||--o{ sms_delivery_reports : "melaporkan pengiriman"
+    sms_jobs ||--o{ sms_delivery_reports : "memiliki riwayat delivery"
+    sms_pairing_codes ||--o| sms_gateways : "dipasangkan ke"
+
+    sms_gateways {
+        int id PK "Auto Increment"
+        varchar device_id UK "Unique Device Identifier (e.g. dev_08123456789)"
+        varchar device_name "Nama Gateway (e.g. Android Cabang Jakarta)"
+        varchar token_hash "Hash SHA-256 Token Otentikasi"
+        varchar status "ONLINE | OFFLINE | DISABLED"
+        varchar sim_operator "Telkomsel | Indosat | XL | Smartfren"
+        int sim_slot "Nomor Slot SIM (Default: 1)"
+        varchar phone_number "Nomor Telepon SIM Aktif"
+        int battery_level "Persentase Baterai (0-100)"
+        int signal_strength "Kekuatan Sinyal Seluler (0-100)"
+        tinyint is_charging "Status Pengisian Daya (1/0)"
+        varchar app_version "Versi Aplikasi Android Gateway"
+        int rate_limit_per_minute "Batas Kirim Per Menit (Default: 30)"
+        int rate_limit_per_hour "Batas Kirim Per Jam (Default: 500)"
+        int rate_limit_per_day "Batas Kirim Per Hari (Default: 5000)"
+        datetime last_seen_at "Waktu Heartbeat Terakhir"
+        datetime created_at "Waktu Registrasi"
+        datetime updated_at "Waktu Update Terakhir"
+    }
+
+    sms_phone_lines {
+        varchar id PK "Primary Key (e.g. 08123456789_SIM1)"
+        varchar user_id "User Owner ID (e.g. usr_admin)"
+        text fcm_token "Google FCM Device Registration Token"
+        varchar phone_number "Nomor Telepon SIM"
+        varchar sim "SIM1 (Strict Single SIM Mode)"
+        varchar device_id "Relasi ke sms_gateways.device_id"
+        tinyint is_active "Status Keaktifan (1=Aktif, 0=Nonaktif)"
+        datetime created_at "Waktu Pendaftaran"
+        datetime updated_at "Waktu Update Token Terakhir"
+    }
+
+    sms_pairing_codes {
+        int id PK "Auto Increment"
+        varchar code UK "6-Karakter Alfanumerik Unik (e.g. K9A4B2)"
+        varchar device_name "Nama Perangkat Target Pairing"
+        datetime expires_at "Waktu Kadaluarsa Kode"
+        tinyint is_used "Status Penggunaan (1=Terpakai, 0=Tersedia)"
+        varchar used_by_device_id "Device ID yang mengklaim kode"
+        datetime used_at "Waktu Pairing Berhasil"
+        datetime created_at "Waktu Dibuat"
+        datetime updated_at "Waktu Diupdate"
+    }
+
+    sms_jobs {
+        int id PK "Auto Increment"
+        varchar job_id UK "Unique SMS ID (e.g. SMS-20260912-A1B2C3)"
+        varchar client_message_id UK "Idempotency Key dari Klien Eksternal"
+        varchar recipient "Nomor Tujuan Format E.164 (+62...)"
+        text message "Isi Teks Pesan SMS"
+        varchar status "PENDING | CLAIMED | SENDING | SENT | DELIVERED | RETRY | FAILED_PERMANENT"
+        int priority "Prioritas: 1=Tinggi/OTP, 2=Normal, 3=Rendah/Broadcast"
+        int attempt "Jumlah Percobaan Pengiriman"
+        int max_attempt "Maksimal Percobaan Sebelum Gagal Permanen (Default: 3)"
+        varchar assigned_device_id "Device ID / Nomor SIM yang Mengirim"
+        datetime available_at "Waktu Tersedia untuk Dikirim / Backoff Delay"
+        datetime claimed_at "Waktu Pesan Dikunci oleh Device"
+        datetime claim_expires_at "Waktu Batas Kunci (Lock Timeout 60s)"
+        datetime sent_at "Waktu Terkirim ke BTS Operator"
+        datetime delivered_at "Waktu Diterima di Handphone Tujuan"
+        text failed_reason "Catatan / Pesan Kesalahan Operator"
+        datetime created_at "Waktu Masuk Antrean"
+        datetime updated_at "Waktu Update Status"
+    }
+
+    sms_delivery_reports {
+        int id PK "Auto Increment"
+        varchar job_id "Relasi ke sms_jobs.job_id"
+        varchar device_id "Device ID yang Melaporkan"
+        varchar status "SENT | DELIVERED | FAILED"
+        varchar operator_status_code "Kode Status dari Operator Seluler"
+        varchar operator_status_message "Pesan Status / Error Operator"
+        text raw_payload "Raw JSON Payload Laporan dari Android"
+        datetime reported_at "Waktu Kejadian Laporan"
+        datetime created_at "Waktu Dicatat ke Database"
+    }
+
+    sms_audit_logs {
+        int id PK "Auto Increment"
+        varchar actor_type "ADMIN | ANDROID_APP | API_CLIENT | SYSTEM"
+        varchar actor_id "ID Aktor (IP / Device ID / User ID)"
+        varchar action "Jenis Aksi (e.g. SMS_JOB_QUEUED, DEVICE_PAIRED)"
+        varchar target "Target Aksi (e.g. SMS-XXXX, Device-01)"
+        varchar ip_address "Alamat IP Request"
+        text metadata "JSON Metadata Konteks Tambahan"
+        datetime created_at "Waktu Log Dibuat"
+    }
+```
+
+---
+
+## 3. Flowchart & Sequence Diagram Alur Kerja
+
+### A. Flowchart Alur Pengiriman SMS End-to-End
+
+```mermaid
+flowchart TD
+    Start([Klien Mengirim Request Kirim SMS]) --> CheckIdempotency{Apakah client_message_id<br/>sudah pernah ada di database?}
+    
+    CheckIdempotency -- Ya (Duplikat) --> ReturnReplay[Kembalikan Data Job yang Sudah Ada<br/>HTTP 200 Idempotent]
+    CheckIdempotency -- Tidak (Pesan Baru) --> InsertJob[Simpan ke Tabel sms_jobs<br/>Status: PENDING, Attempt: 0]
+    
+    InsertJob --> CheckDispatchConfig{Cek Konfigurasi .env<br/>Metode Pengiriman Aktif}
+    
+    CheckDispatchConfig -- USE_FIREBASE=true --> SelectTarget[Pilih 1 Device / SIM Line Aktif<br/>(Bukan Broadcast)]
+    SelectTarget --> TriggerFCM[Tembak Push Data FCM v1<br/>Payload: KEY_MESSAGE_ID]
+    TriggerFCM --> AndroidWakeup[Android Menerima Silent Push FCM]
+    
+    CheckDispatchConfig -- USE_SSE=true --> PushSSE[Kirim Event new_sms_job<br/>via HTTP SSE Stream]
+    PushSSE --> AndroidWakeup
+    
+    CheckDispatchConfig -- USE_WEBSOCKET=true --> BroadcastWS[Kirim Pesan JSON via WebSocket]
+    BroadcastWS --> AndroidWakeup
+    
+    AndroidWakeup --> FetchJob[Android Request:<br/>GET /v1/messages/outstanding]
+    FetchJob --> LockJob[Server Tandai:<br/>Status: SENDING, Attempt: 1<br/>Assigned Device: dev_xxx]
+    
+    LockJob --> AndroidSendSMS[Android Memanggil SmsManager.sendTextMessage<br/>Mengirim Pulsa GSM via SIM1]
+    
+    AndroidSendSMS --> SentRadio{Apakah Radio BTS Menerima?}
+    SentRadio -- Sukses --> ReportSent[Android Kirim Event SENT:<br/>POST /v1/messages/:id/events]
+    ReportSent --> UpdateSent[Server Update Status: SENT<br/>Simpan ke Delivery Report]
+    
+    SentRadio -- Gagal --> ReportFailed[Android Kirim Event FAILED]
+    ReportFailed --> RetryLogic{Attempt < Max Attempt?}
+    RetryLogic -- Ya --> SetRetry[Server Set Status: RETRY<br/>Backoff Delay: 30s/5m/15m]
+    RetryLogic -- Tidak --> SetFailedPerm[Server Set Status: FAILED_PERMANENT]
+    
+    UpdateSent --> HandsetDelivered{Apakah HP Tujuan Menerima SMS?<br/>Delivery PDU}
+    HandsetDelivered -- Ya --> ReportDelivered[Android Kirim Event DELIVERED]
+    ReportDelivered --> UpdateDelivered[Server Update Status: DELIVERED]
+    HandsetDelivered -- Tidak / Kadaluarsa --> EndNode([Selesai])
+    UpdateDelivered --> EndNode
+    ReturnReplay --> EndNode
+    SetFailedPerm --> EndNode
+```
+
+---
+
+### B. Flowchart Pairing Perangkat Android
+
+```mermaid
+flowchart TD
+    Admin[Admin di Web Dashboard] --> ClickGenerate[Klik Tombol Generate Pairing Code]
+    ClickGenerate --> CreateCode[Server Membuat 6-Karakter Kode Unik<br/>Tersimpan di sms_pairing_codes]
+    CreateCode --> DisplayQR[Tampilkan Kode & QR Code di Layar Dashboard]
+    
+    AndroidApp[Buka Aplikasi Android Gateway] --> ScanInput[Scan QR Code atau Input Manual 6-Karakter]
+    ScanInput --> RequestPair[Android Kirim POST /api/v1/gateway/pair<br/>Payload: pairing_code, fcm_token, phone_number]
+    
+    RequestPair --> ValidatePairing{Validasi Kode Pairing di Server}
+    ValidatePairing -- Tidak Valid / Expired --> RejectPair[Kembalikan HTTP 400 Error]
+    
+    ValidatePairing -- Valid --> UpsertGateway[Upsert Record di sms_gateways<br/>Status: ONLINE]
+    UpsertGateway --> RegisterPhoneLine[Register SIM Line di sms_phone_lines<br/>Mapping phone_number + fcm_token]
+    RegisterPhoneLine --> MarkUsed[Tandai Kode Pairing: is_used = 1]
+    MarkUsed --> GenerateToken[Buat Secure Device Token: gw_tok_xxxx]
+    GenerateToken --> ReturnSuccess[Kembalikan HTTP 200 OK ke Android<br/>Pairing Sukses Single SIM]
+```
+
+---
+
+### C. Flowchart Queue Maintenance & Retry Backoff
+
+```mermaid
+flowchart TD
+    TriggerWorker[Cron Job Server / Tombol 'Run Worker'] --> Step1[1. Recover Stale Claims]
+    Step1 --> CheckStale{Ada job status CLAIMED<br/>dengan claim_expires_at < NOW ?}
+    CheckStale -- Ada --> ResetPending[Reset Status ke PENDING<br/>Lepaskan assigned_device_id]
+    CheckStale -- Tidak Ada --> Step2[2. Process Scheduled Retries]
+    
+    ResetPending --> Step2
+    Step2 --> CheckRetries{Ada job status RETRY<br/>dengan available_at <= NOW ?}
+    CheckRetries -- Ada --> ReleaseRetry[Ubah Status Menjadi PENDING<br/>Siap Di-dispatch Kembali]
+    CheckRetries -- Tidak Ada --> FinishWorker[Catat Statistik Antrean Selesai]
+    ReleaseRetry --> FinishWorker
+```
+
+---
+
+### D. Sequence Diagram Pengiriman SMS via FCM HTTP v1
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Admin as Web Dashboard / Server Eksternal
-    participant Server as Backend SMS Gateway (CI4)
+    actor Client as Server Eksternal / Web UI
+    participant Backend as Backend SMS Gateway (CI4)
+    participant DB as MySQL Database
     participant FCM as Google Firebase (HTTP v1)
     participant Android as HP Android Gateway
+    participant GSM as Operator Seluler / SMS Center
 
-    %% Tahap 1: Pairing
-    Note over Admin,Android: 1. Tahap Pairing (Sekali saat registrasi HP)
-    Admin->>Server: Generate Pairing Code / Scan QR Code
-    Android->>Server: POST /api/v1/gateway/pair (Pairing Code + FCM Token + No HP)
-    Server-->>Android: 200 OK (Device Paired, Single SIM1 Activated)
-
-    %% Tahap 2: Kirim SMS
-    Note over Admin,Android: 2. Tahap Pengiriman SMS Transaksional / OTP
-    Admin->>Server: POST /api/v1/sms/send (Nomor HP + Pesan)
-    Server->>Server: Simpan SMS ke Queue (Status: PENDING)
-    Server->>FCM: POST /v1/projects/{project}/messages:send (Data: KEY_MESSAGE_ID)
-    FCM-->>Android: Push Data Notification (Silent Wakeup)
-    Android->>Server: GET /api/v1/messages/outstanding?message_id=SMS-XXXX
-    Server-->>Android: 200 OK (Nomor Penerima & Isi Pesan)
-    Android->>Android: Kirim SMS via SmsManager (Pulsa SIM1)
-    Android->>Server: POST /api/v1/messages/SMS-XXXX/events (SENT / DELIVERED)
-    Server->>Server: Update status SMS menjadi SENT / DELIVERED
-
-    %% Tahap 3: Heartbeat
-    Note over Android,Server: 3. Pemantauan Kondisi HP
-    Android->>Server: POST /api/v1/heartbeats (Baterai, Charging, Sinyal)
-    Server-->>Android: 200 OK
+    Client->>Backend: POST /api/v1/sms/send (recipient, message)
+    Backend->>DB: INSERT INTO sms_jobs (Status: PENDING)
+    DB-->>Backend: OK (job_id: SMS-XXXX)
+    
+    Note over Backend,FCM: Menembak Notifikasi ke 1 Device Terpilih
+    Backend->>DB: Query 1 SIM Line Teraktif (FCM Token)
+    DB-->>Backend: Return Target Device (dev_08123456789)
+    Backend->>FCM: POST /v1/projects/.../messages:send (Data: KEY_MESSAGE_ID)
+    Backend-->>Client: 202 Accepted (job_id: SMS-XXXX, status: PENDING)
+    
+    FCM-->>Android: High Priority Data Push (Silent Background Wakeup)
+    Android->>Backend: GET /v1/messages/outstanding?message_id=SMS-XXXX
+    Backend->>DB: UPDATE sms_jobs SET status='SENDING', attempt=1
+    Backend-->>Android: 200 OK (recipient, message content)
+    
+    Android->>GSM: Kirim SMS via SmsManager (SIM1)
+    GSM-->>Android: SMS Handed to Carrier BTS
+    Android->>Backend: POST /v1/messages/SMS-XXXX/events (event_name: SENT)
+    Backend->>DB: UPDATE sms_jobs SET status='SENT', sent_at=NOW()
+    
+    GSM-->>Android: SMS Delivery Report Received (Handset Diterima)
+    Android->>Backend: POST /v1/messages/SMS-XXXX/events (event_name: DELIVERED)
+    Backend->>DB: UPDATE sms_jobs SET status='DELIVERED', delivered_at=NOW()
 ```
 
 ---
 
-## 2. Spesifikasi Teknis & Persyaratan Server
+## 4. Struktur Controller & Namespace Modular
 
-| Komponen | Spesifikasi / Kebutuhan |
-|---|---|
-| **Framework** | CodeIgniter 4.4+ (PHP 8.1 / 8.2 / 8.3 / 8.4) |
-| **Database** | SQLite 3 (Default, single-file di `writable/sms_gateway.db`) atau MySQL / MariaDB |
-| **Protokol Push** | Google Firebase Cloud Messaging **HTTP v1 API** (Otentikasi OAuth2 RS256) |
-| **Web Server** | Apache / LiteSpeed / Nginx dengan mod_rewrite aktif |
-| **Keamanan Auth** | Token Pairing Device (Bearer Token), Global API Key (`x-api-key`), dan Device ID Filtering |
-| **Format Data** | JSON Payload dengan Standar Envelope: `{ "status": "...", "data": ..., "message": "..." }` |
-| **Kebijakan SIM** | **Strict Single SIM Mode** (1 provider & 1 nomor HP aktif per perangkat HP) |
+Kode backend ditata secara modular ke dalam sub-namespace terpisah di dalam `app/Controllers/`:
+
+```text
+app/Controllers/
+├── BaseController.php
+│
+├── Web/                                # 1. Domain Web Dashboard & Admin UI
+│   └── DashboardController.php         # Render UI, Polling Data, Test SMS, Worker, Device Actions
+│
+├── Mobile/                             # 2. Domain Android Mobile App Client (com.httpsms)
+│   └── MobileApiController.php         # Register FCM Token, Polling Outstanding Job, Heartbeat, Event
+│
+├── Internal/                           # 3. Domain Internal Backend / Microservices API
+│   └── InternalSmsController.php       # Enqueue SMS (/sms/send), Cek Status SMS, Statistik Antrean
+│
+├── Gateway/                            # 4. Domain Dedicated Hardware / Custom Gateway Device
+│   └── GatewayApiController.php        # Handshake Pairing, SSE Stream, Atomic Job Claim, Delivery Report
+│
+└── Api/                                # (Backward Compatibility Wrappers untuk integrasi lama)
+    ├── HttpSmsController.php           # Extend MobileApiController
+    ├── SmsApiController.php            # Extend InternalSmsController
+    └── GatewayApiController.php        # Extend GatewayApiController
+```
 
 ---
 
-## 3. Panduan Instalasi & Setup Server
+## 5. Spesifikasi Teknis & Persyaratan Server
 
-### 1. Clone Repository & Install Dependencies
-```bash
-git clone https://github.com/sdgede/sms_gateway.git
-cd sms_gateway
-composer install --no-dev --optimize-autoloader
-```
+| Komponen | Kebutuhan Minimum | Rekomendasi Produksi |
+| :--- | :--- | :--- |
+| **Bahasa & Runtime** | PHP 8.1 / 8.2 / 8.3 / 8.4 | PHP 8.2+ dengan ekstensi `curl`, `json`, `mbstring`, `openssl`, `mysqli` |
+| **Web Server** | Apache / LiteSpeed / Nginx | Nginx / LiteSpeed dengan SSL/TLS aktif (HTTPS) |
+| **Database** | SQLite 3 | **MySQL 8.0+ / MariaDB 10.6+** |
+| **Protokol Push** | Firebase Cloud Messaging HTTP v1 | Google Service Account OAuth2 (RS256 JWT) |
+| **Kebijakan SIM** | Single SIM Mode | 1 Nomor Provider GSM & 1 Slot SIM per HP Android |
 
-### 2. Salin dan Sesuaikan Konfigurasi `.env`
-Salin file `env` menjadi `.env`:
-```bash
-cp env .env
-```
+---
 
-Buka dan sesuaikan isi file `.env`:
+## 6. Panduan Instalasi & Konfigurasi Database (MySQL / SQLite)
+
+### A. Konfigurasi Menggunakan MySQL (Disarankan untuk Produksi)
+
+Buka file `.env` di root project dan sesuaikan bagian database:
+
 ```ini
-# Environment
-CI_ENVIRONMENT = production
-
-# URL Aplikasi (Sesuaikan domain & subfolder jika ada)
-app.baseURL = 'https://secureapi.pandemenulis.com/sms/'
-
-# Global API Key untuk Server Eksternal (Laravel, NodeJS, dll)
-app.smsApiKey = 'sms_secret_api_key_2026'
-
 #--------------------------------------------------------------------
-# 3 METODE DISPATCH KE ANDROID (PILIH METODE DENGAN TRUE / FALSE)
+# DATABASE CONFIGURATION (MYSQL)
 #--------------------------------------------------------------------
-USE_FIREBASE  = true    # Metode 1: Google Firebase Cloud Messaging (FCM HTTP v1)
-USE_SSE       = false   # Metode 2: Server-Sent Events (SSE Stream via HTTP)
-USE_WEBSOCKET = false   # Metode 3: WebSocket Real-Time Daemon
-
-# Lokasi File Kredensial Firebase Service Account (Jika USE_FIREBASE = true)
-fcm.credentialsFile = 'writable/firebase/service-account.json'
-
-# Konfigurasi Database SQLite (Otomatis absolut ke folder writable/)
-database.default.DBDriver = SQLite3
-database.default.database = WRITEPATH . 'sms_gateway.db'
+database.default.hostname = localhost
+database.default.database = nama_database_sms
+database.default.username = user_database_sms
+database.default.password = password_database_anda
+database.default.DBDriver = MySQLi
+database.default.DBPrefix =
+database.default.port     = 3306
+database.default.charset  = utf8mb4
+database.default.DBCollat = utf8mb4_general_ci
 ```
 
-### 3. Izin Folder (Permissions)
-Pastikan folder `writable` dapat dibaca dan ditulis oleh web server:
-```bash
-chmod -R 775 writable
-```
-
-### 4. Jalankan Migrasi Database
+Jalankan perintah migrasi tabel:
 ```bash
 php spark migrate
 ```
 
 ---
 
-## 4. Tiga (3) Metode Dispatch ke Android (`.env`)
+### B. Konfigurasi Menggunakan SQLite
 
-Sistem menyediakan **3 pilihan metode komunikasi** untuk memicu pengiriman SMS ke HP Android secara instan:
+Jika menggunakan SQLite tanpa perlu setup database MySQL:
 
-| Metode | Pengaturan di `.env` | Cara Kerja | Keunggulan |
-|---|---|---|---|
-| **1. Firebase FCM (HTTP v1)** *(Default)* | `USE_FIREBASE = true` | Server mengirim push silent data ke Android (`KEY_MESSAGE_ID`), Android bangun dan mengambil SMS via REST API. | Paling hemat baterai di Android, HP bisa standby/layar mati, tidak butuh port khusus. |
-| **2. Server-Sent Events (SSE)** | `USE_SSE = true` | Android terhubung ke stream HTTP persistent (`GET /api/v1/gateway/jobs/stream`). Setiap ada SMS baru langsung di-push. | Tanpa dependensi Firebase / Google Play Service, berjalan di port HTTP(S) standar web server. |
-| **3. WebSocket Daemon** | `USE_WEBSOCKET = true` | Android terhubung ke server WebSocket real-time (`ws://...`). | Latensi instan milidetik, koneksi full-duplex dua arah. |
-
-> [!TIP]
-> Anda cukup mengeset `true` pada metode yang ingin digunakan di `.env`. Jika ingin mengaktifkan lebih dari 1 metode sekaligus (misal: Firebase + SSE), Anda cukup mengeset keduanya bernilai `true`.
-
-
----
-
-## 4. Konfigurasi Firebase Cloud Messaging (FCM HTTP v1)
-
-> [!IMPORTANT]
-> Google telah **menonaktifkan FCM Legacy API** (`fcm.googleapis.com/fcm/send`). Sistem SMS Gateway ini menggunakan standar resmi **Firebase HTTP v1 API** menggunakan Private Key Service Account.
-
-### Langkah Setup Firebase:
-1. Masuk ke [Firebase Console](https://console.firebase.google.com/) dan buka project Anda.
-2. Klik ikon **Project Settings** (ikon gear di kiri atas) → pilih tab **Service accounts**.
-3. Klik tombol **Generate new private key** → Simpan file `.json` yang terunduh.
-4. Terapkan kredensial tersebut ke server dengan salah satu cara berikut:
-
-#### Opsi A: Upload File (Direkomendasikan)
-Upload file `.json` tersebut ke server pada path:
-```
-writable/firebase/service-account.json
-```
-
-#### Opsi B: Inject String JSON ke `.env`
-Buka file `.env` di server dan paste string JSON (atau base64-nya) secara langsung:
 ```ini
-fcm.credentialsJson = '{"type":"service_account","project_id":"project-id-anda","private_key":"-----BEGIN PRIVATE KEY-----\nMIIE...","client_email":"firebase-adminsdk@project-id-anda.iam.gserviceaccount.com"}'
+database.default.DBDriver = SQLite3
+database.default.database = WRITEPATH . 'sms_gateway.db'
 ```
 
-*Verifikasi:* Buka dashboard web `https://domain-anda.com/sms/`. Widget status **FCM Service** akan berubah menjadi **Active (HTTP_V1)**.
+---
+
+## 7. Tiga (3) Metode Komunikasi Dispatcher (`.env`)
+
+Sistem mendukung 3 metode pengiriman sinyal ke Android yang dapat diatur cukup dengan `true` / `false` di `.env`:
+
+```ini
+#--------------------------------------------------------------------
+# SMS DISPATCH METHODS (PILIH METODE PENGIRIMAN KE ANDROID)
+#--------------------------------------------------------------------
+USE_FIREBASE  = true     # Metode 1: Firebase Cloud Messaging (FCM HTTP v1)
+USE_SSE       = false    # Metode 2: Server-Sent Events (SSE Stream via HTTP)
+USE_WEBSOCKET = false    # Metode 3: WebSocket Real-Time Daemon
+```
 
 ---
 
-## 5. Alur Pairing Android (Mode Single SIM: 1 Provider & 1 Nomor)
+## 8. Setup Firebase Cloud Messaging (FCM HTTP v1)
 
-### Kebijakan Single SIM:
-Sistem beroperasi dalam mode **Single SIM** (`SIM1`). Setiap device gateway hanya boleh memiliki **1 provider aktif dan 1 nomor telepon**.
-
-### Cara Melakukan Pairing:
-1. Buka Web Dashboard di browser: `https://domain-anda.com/sms/`.
-2. Masukkan nama perangkat pada form **Device Pairing** (contoh: `Redmi Note 10 Gateway`) lalu klik **Generate Pairing Code & QR**.
-3. Muncul modal QR Code dan 6 karakter kode pairing (contoh: `A8C2E1`).
-4. Buka aplikasi Android:
-   - **Opsi 1 (Scan QR):** Scan QR Code di layar dashboard.
-   - **Opsi 2 (Ketik Manual):** Masukkan kode 6 karakter ke aplikasi.
-5. HP Android akan otomatis mengirim data SIM, nomor HP, dan token FCM ke server tanpa memerlukan API Key di header.
-
----
-
-## 6. Dokumentasi Lengkap REST API Mobile Android
-
-Semua endpoint mobile dapat diakses pada prefix `/api/v1/...` maupun alias `/v1/...`.  
-Otentikasi mobile diverifikasi secara otomatis melalui `device_id`, token pairing, atau `X-Client-Version`.
+1. Buka [Google Firebase Console](https://console.firebase.google.com/).
+2. Masuk ke **Project Settings** > **Service Accounts**.
+3. Klik tombol **Generate new private key** (akan mengunduh file JSON).
+4. Simpan file JSON tersebut ke direktori server:
+   ```text
+   writable/firebase/service-account.json
+   ```
+5. Pastikan konfigurasi di `.env` sudah mengarah ke file tersebut:
+   ```ini
+   fcm.credentialsFile = 'writable/firebase/service-account.json'
+   ```
 
 ---
 
-### A. Pairing Device (`POST /api/v1/gateway/pair`)
-Dipanggil saat HP Android melakukan scan QR Code atau submit kode pairing.
+## 9. Dokumentasi Lengkap REST API
 
-- **Method & URL:** `POST /api/v1/gateway/pair` (atau `POST /gateway/pair`)
-- **Headers:** `Content-Type: application/json`
-- **Request Body:**
-  ```json
-  {
-    "pairing_code": "A8C2E1",
-    "fcm_token": "fcm_token_panjang_dari_firebase...",
-    "phone_number": "+6282147836034",
-    "sim": "SIM1",
-    "sim_operator": "TELKOMSEL",
-    "device_name": "Xiaomi Gateway",
-    "device_model": "Redmi Note 10",
-    "app_version": "1.0.0"
-  }
-  ```
-- **Response Sukses (200 OK):**
-  ```json
-  {
-    "status": "success",
-    "message": "Device successfully paired to SMS Gateway (Single SIM Mode).",
-    "data": {
-      "device_id": "redmi_note_10-a1b2c3",
-      "device_name": "Xiaomi Gateway",
-      "token": "gw_tok_3f9c8d2a1b7e405f6a8b9c0d1e2f3a4b",
-      "device_token": "gw_tok_3f9c8d2a1b7e405f6a8b9c0d1e2f3a4b",
-      "phone_number": "+6282147836034",
-      "sim": "SIM1",
-      "sim_operator": "TELKOMSEL",
-      "fcm_registered": true,
-      "server_time": "2026-09-12 09:30:00"
-    }
-  }
-  ```
+### A. Internal API (Untuk Aplikasi Backend / Microservices)
 
----
+Semua endpoint dilindungi oleh header `x-api-key`.
 
-### B. Registrasi Token FCM (`PUT /api/v1/phones/fcm-token`)
-Dipanggil saat login per SIM atau ketika token FCM disegarkan (`onNewToken`).
-
-- **Method & URL:** `PUT /api/v1/phones/fcm-token` (atau `PUT /v1/phones/fcm-token`)
-- **Headers:** `Content-Type: application/json`
-- **Request Body:**
-  ```json
-  {
-    "fcm_token": "eKz9_token_fcm_terbaru_dari_google...",
-    "phone_number": "+6282147836034",
-    "sim": "SIM1"
-  }
-  ```
-- **Response Sukses (200 OK):**
-  ```json
-  {
-    "status": "success",
-    "message": "ok",
-    "data": {
-      "id": "phone_a1b2c3d4e5f6",
-      "user_id": "usr_default_admin"
-    }
-  }
-  ```
-
----
-
-### C. Ambil Pesan untuk Dikirim (`GET /api/v1/messages/outstanding`)
-Dipanggil oleh background worker Android setelah menerima notifikasi push FCM data `KEY_MESSAGE_ID`.
-
-- **Method & URL:** `GET /api/v1/messages/outstanding?message_id=SMS-20260912-A1B2C3`
-- **Response Sukses (200 OK):**
-  ```json
-  {
-    "status": "success",
-    "message": "ok",
-    "data": {
-      "id": "SMS-20260912-A1B2C3",
-      "contact": "+6281234567890",
-      "content": "Kode OTP verifikasi akun Anda adalah 948201. Berlaku 5 menit.",
-      "sim": "SIM1",
-      "owner": "+6282147836034",
-      "encrypted": false,
-      "status": "outstanding",
-      "type": "sms",
-      "created_at": "2026-09-12T09:30:00.000000Z",
-      "order_timestamp": "2026-09-12T09:30:00.000000Z",
-      "request_received_at": "2026-09-12T09:30:00.000000Z",
-      "updated_at": "2026-09-12T09:30:00.000000Z",
-      "failure_reason": null,
-      "last_attempted_at": null,
-      "received_at": null,
-      "sent_at": null,
-      "send_time": null,
-      "attachments": []
-    }
-  }
-  ```
-
----
-
-### D. Laporan Status Pengiriman (`POST /api/v1/messages/{id}/events`)
-Dipanggil oleh Android setelah SMS sukses diserahkan ke jaringan seluler atau gagal kirim.
-
-- **Method & URL:** `POST /api/v1/messages/{messageId}/events`
-- **Request Body (Jika Sukses Terkirim / Handed to network):**
-  ```json
-  {
-    "event_name": "SENT",
-    "timestamp": "2026-09-12T09:30:05.000000Z"
-  }
-  ```
-- **Request Body (Jika Laporan Delivery / Handset received):**
-  ```json
-  {
-    "event_name": "DELIVERED",
-    "timestamp": "2026-09-12T09:30:10.000000Z"
-  }
-  ```
-- **Request Body (Jika Gagal / Pulsa Habis / No Signal):**
-  ```json
-  {
-    "event_name": "FAILED",
-    "reason": "RESULT_ERROR_GENERIC_FAILURE: Pulsa tidak mencukupi",
-    "timestamp": "2026-09-12T09:30:05.000000Z"
-  }
-  ```
-- **Response Sukses (200 OK):**
-  ```json
-  {
-    "status": "success",
-    "message": "ok",
-    "data": null
-  }
-  ```
-
----
-
-### E. Laporan Heartbeat / Baterai / Sinyal (`POST /api/v1/heartbeats`)
-Dikirim secara periodik oleh aplikasi Android untuk memantau konektivitas, daya baterai, dan operator.
-
-- **Method & URL:** `POST /api/v1/heartbeats`
-- **Headers:** `X-Client-Version: 1.0.0`
-- **Request Body:**
-  ```json
-  {
-    "device_id": "700d6d4f-7725-4f2c-b0a9-bbe41ec4b4b1",
-    "app_version": "1.0.0",
-    "timestamp": 1789117867,
-    "sms_permission": true,
-    "battery_optimization_disabled": true,
-    "battery_level": 98,
-    "is_charging": true,
-    "active_subscription_id": 1,
-    "sim_carrier": "TELKOMSEL",
-    "network_type": "CELLULAR",
-    "phone_numbers": ["+6282147836034"]
-  }
-  ```
-- **Response Sukses (200 OK):**
-  ```json
-  {
-    "status": "success",
-    "message": "ok",
-    "data": null
-  }
-  ```
-
----
-
-### F. Penerimaan SMS Masuk / Inbox (`POST /api/v1/messages/receive`)
-Dipanggil saat nomor HP gateway menerima SMS baru dari customer.
-
-- **Method & URL:** `POST /api/v1/messages/receive`
-- **Request Body:**
-  ```json
-  {
-    "from": "+6281299887766",
-    "to": "+6282147836034",
-    "content": "Halo, saya sudah transfer pembayaran pesanan #ORD-9981.",
-    "sim": "SIM1",
-    "timestamp": "2026-09-12 09:35:00",
-    "encrypted": false
-  }
-  ```
-- **Response Sukses (200 OK):**
-  ```json
-  {
-    "status": "success",
-    "message": "ok",
-    "data": null
-  }
-  ```
-
----
-
-### G. Real-Time SSE Stream Job (`GET /api/v1/gateway/jobs/stream`)
-Koneksi persistent Server-Sent Events (SSE) jika Android ingin menerima stream job instan secara langsung tanpa menunggu polling.
-
-- **Method & URL:** `GET /api/v1/gateway/jobs/stream`
-- **Headers:** `Authorization: Bearer <DEVICE_TOKEN>`
-- **Event Stream Output:**
-  ```text
-  event: connected
-  data: {"status":"ONLINE","device_id":"redmi-10"}
-
-  event: new_sms_job
-  data: {"job_id":"SMS-20260912-A1B2C3","recipient":"+6281234567890","message":"OTP: 123456"}
-  ```
-
----
-
-## 7. Dokumentasi REST API untuk Server / Aplikasi Luar
-
-Gunakan API Key (`x-api-key`) yang tertera di file `.env` server Anda untuk mengirimkan request dari Laravel, Express.js, Golang, Python, atau script cron.
-
----
-
-### A. Kirim SMS Keluar (`POST /api/v1/sms/send`)
-Memasukkan pesan SMS ke dalam antrean pengiriman dan langsung mentrigger notifikasi FCM ke HP Android.
-
-- **Method & URL:** `POST /api/v1/sms/send`
-- **Headers:**
+#### 1. Enqueue / Kirim SMS
+- **URL**: `POST /api/v1/sms/send`
+- **Headers**:
   ```http
+  x-api-key: sms_secret_api_key_2026
   Content-Type: application/json
-  x-api-key: <app.smsApiKey>
   ```
-- **Request Body:**
+- **Body JSON**:
   ```json
   {
     "recipient": "+6281234567890",
-    "message": "Halo Bpk/Ibu, pesanan Anda #INV-1029 telah dikirimkan via JNE (Resi: 01293819283).",
+    "message": "Kode OTP Anda adalah 849201. Berlaku selama 5 menit.",
     "priority": 1,
-    "client_message_id": "INV-1029-NOTIF",
+    "client_message_id": "ORDER-98214-OTP",
     "max_attempt": 3
   }
   ```
-- **Parameter Penjelasan:**
-  - `recipient` *(Wajib)*: Nomor HP tujuan (format `08...`, `628...`, atau `+628...`).
-  - `message` *(Wajib)*: Teks isi SMS.
-  - `priority` *(Opsional)*: `1` (High / OTP), `2` (Medium / Transaksional), `3` (Low / Promosi). Default: `2`.
-  - `client_message_id` *(Opsional)*: Unique ID dari sistem Anda untuk idempotency (mencegah double kirim).
-  - `max_attempt` *(Opsional)*: Maksimal percobaan ulang jika gagal (default: `3`).
-
-- **Response Sukses (202 Accepted / 200 OK jika replay):**
+- **Response Sukses (HTTP 202 Accepted)**:
   ```json
   {
     "status": "success",
     "message": "SMS job queued successfully",
     "data": {
-      "job_id": "SMS-20260912093000-8A9B0C",
-      "client_message_id": "INV-1029-NOTIF",
+      "job_id": "SMS-20260912140000-A1B2C3",
+      "client_message_id": "ORDER-98214-OTP",
       "recipient": "+6281234567890",
       "status": "PENDING",
       "priority": 1,
       "attempt": 0,
       "is_replay": false,
-      "available_at": "2026-09-12 09:30:00",
-      "created_at": "2026-09-12 09:30:00"
+      "created_at": "2026-09-12 14:00:00"
     }
   }
   ```
 
-#### Contoh Integrasi PHP / cURL:
-```php
-<?php
-$curl = curl_init();
-
-$payload = [
-    'recipient'         => '+6281234567890',
-    'message'           => 'Kode OTP Anda adalah 839201. Rahasiakan kode ini.',
-    'priority'          => 1,
-    'client_message_id' => 'OTP-' . time(),
-];
-
-curl_setopt_array($curl, [
-    CURLOPT_URL => 'https://secureapi.pandemenulis.com/sms/api/v1/sms/send',
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => json_encode($payload),
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'x-api-key: sms_secret_api_key_2026',
-    ],
-]);
-
-$response = curl_exec($curl);
-curl_close($curl);
-
-echo $response;
-```
-
----
-
-### B. Cek Status Pengiriman (`GET /api/v1/sms/status/{id}`)
-Mengecek status live pengiriman pesan berdasarkan `job_id` atau `client_message_id`.
-
-- **Method & URL:** `GET /api/v1/sms/status/{job_id_atau_client_message_id}`
-- **Headers:** `x-api-key: <app.smsApiKey>`
-- **Response Sukses (200 OK):**
+#### 2. Cek Status Pengiriman SMS
+- **URL**: `GET /api/v1/sms/status/{job_id_atau_client_message_id}`
+- **Headers**: `x-api-key: sms_secret_api_key_2026`
+- **Response Sukses (HTTP 200 OK)**:
   ```json
   {
     "status": "success",
     "data": {
-      "job_id": "SMS-20260912093000-8A9B0C",
-      "client_message_id": "INV-1029-NOTIF",
+      "job_id": "SMS-20260912140000-A1B2C3",
+      "client_message_id": "ORDER-98214-OTP",
       "recipient": "+6281234567890",
-      "message": "Halo Bpk/Ibu, pesanan Anda #INV-1029 telah dikirimkan...",
+      "message": "Kode OTP Anda adalah 849201...",
       "status": "DELIVERED",
       "priority": 1,
       "attempt": 1,
-      "max_attempt": 3,
-      "assigned_device_id": "dev_6282147836034",
-      "sent_at": "2026-09-12 09:30:04",
-      "delivered_at": "2026-09-12 09:30:08",
-      "failed_reason": null,
-      "created_at": "2026-09-12 09:30:00",
-      "updated_at": "2026-09-12 09:30:08",
-      "delivery_reports": [
-        {
-          "status": "DELIVERED",
-          "reported_at": "2026-09-12 09:30:08"
-        },
-        {
-          "status": "SENT",
-          "reported_at": "2026-09-12 09:30:04"
-        }
-      ]
+      "assigned_device_id": "dev_081234567890",
+      "sent_at": "2026-09-12 14:00:02",
+      "delivered_at": "2026-09-12 14:00:06"
     }
   }
   ```
 
+#### 3. Statistik Antrean SMS
+- **URL**: `GET /api/v1/sms/statistics`
+- **Headers**: `x-api-key: sms_secret_api_key_2026`
+
 ---
 
-### C. Statistik SMS (`GET /api/v1/sms/statistics`)
-Mengambil rekap total SMS (Total, Pending, Sending, Sent, Delivered, Failed).
+### B. Mobile Gateway API (Kontrak com.httpsms)
 
-- **Method & URL:** `GET /api/v1/sms/statistics`
-- **Headers:** `x-api-key: <app.smsApiKey>`
-- **Response Sukses (200 OK):**
+Endpoint yang dipanggil otomatis oleh aplikasi Android Gateway.
+
+#### 1. Registrasi / Refresh Token FCM
+- **URL**: `PUT /v1/phones/fcm-token`
+- **Headers**: `x-api-key: sms_secret_api_key_2026`
+- **Body JSON**:
   ```json
   {
-    "status": "success",
-    "data": {
-      "total": 1250,
-      "pending": 2,
-      "claimed": 0,
-      "sending": 1,
-      "sent": 210,
-      "delivered": 1020,
-      "failed": 12,
-      "retry": 5,
-      "failed_permanent": 0
-    }
+    "fcm_token": "eXample_FcmToken_LongString...",
+    "phone_number": "+6281234567890",
+    "sim": "SIM1"
+  }
+  ```
+
+#### 2. Ambil Pesan yang Perlu Dikirim
+- **URL**: `GET /v1/messages/outstanding?message_id=SMS-XXXX`
+- **Headers**: `x-api-key: sms_secret_api_key_2026`
+
+#### 3. Laporan Status Pengiriman Event
+- **URL**: `POST /v1/messages/{messageId}/events`
+- **Headers**: `x-api-key: sms_secret_api_key_2026`
+- **Body JSON**:
+  ```json
+  {
+    "event_name": "DELIVERED",
+    "reason": null,
+    "timestamp": "2026-09-12T14:00:06Z"
+  }
+  ```
+
+#### 4. Heartbeat Perangkat Android
+- **URL**: `POST /v1/heartbeats`
+- **Headers**: `x-api-key: sms_secret_api_key_2026`
+- **Body JSON**:
+  ```json
+  {
+    "device_id": "dev_081234567890",
+    "phone_numbers": ["+6281234567890"],
+    "battery_level": 88,
+    "is_charging": true,
+    "sim_carrier": "TELKOMSEL"
   }
   ```
 
 ---
 
-### D. Generate Pairing Code via API (`POST /api/v1/admin/pairing/generate`)
-Membuat kode pairing secara programmatik dari sistem admin lain.
+## 10. Contoh Kode Integrasi Klien (PHP, Node.js, Python, cURL)
 
-- **Method & URL:** `POST /api/v1/admin/pairing/generate`
-- **Headers:**
-  ```http
-  Content-Type: application/json
-  x-api-key: <app.smsApiKey>
-  ```
-- **Request Body:**
-  ```json
-  {
-    "device_name": "Gateway Gudang Jakarta",
-    "expiry_minutes": 15
-  }
-  ```
-- **Response Sukses (201 Created):**
-  ```json
-  {
-    "status": "success",
-    "message": "Pairing code generated successfully",
-    "data": {
-      "code": "C7E9A2",
-      "device_name": "Gateway Gudang Jakarta",
-      "expires_at": "2026-09-12 09:45:00"
-    }
-  }
-  ```
+### PHP (Laravel / GuzzleHttp)
+```php
+use Illuminate\Support\Facades\Http;
+
+$response = Http::withHeaders([
+    'x-api-key' => env('SMS_GATEWAY_API_KEY', 'sms_secret_api_key_2026'),
+])->post('https://your-domain.com/api/v1/sms/send', [
+    'recipient'         => '+6281234567890',
+    'message'           => 'Halo! Pesanan #INV-1029 berhasil diverifikasi.',
+    'priority'          => 1,
+    'client_message_id' => 'INV-1029-PAID',
+]);
+
+$result = $response->json();
+echo "Job ID: " . $result['data']['job_id'];
+```
+
+### Node.js (Axios)
+```javascript
+const axios = require('axios');
+
+async function sendSmsOtp(phone, otpCode) {
+    const res = await axios.post('https://your-domain.com/api/v1/sms/send', {
+        recipient: phone,
+        message: `Kode verifikasi akun Anda: ${otpCode}. Rahasiakan kode ini.`,
+        priority: 1,
+        client_message_id: `OTP-${Date.now()}`
+    }, {
+        headers: { 'x-api-key': 'sms_secret_api_key_2026' }
+    });
+    console.log('SMS Dispatched:', res.data.data.job_id);
+}
+```
+
+### Python (Requests)
+```python
+import requests
+
+url = "https://your-domain.com/api/v1/sms/send"
+headers = {"x-api-key": "sms_secret_api_key_2026"}
+payload = {
+    "recipient": "+6281234567890",
+    "message": "Pemberitahuan: Layanan Anda aktif hingga 30 hari ke depan.",
+    "priority": 2
+}
+
+res = requests.post(url, json=payload, headers=headers)
+print(res.json())
+```
+
+### cURL (Terminal / Bash Script)
+```bash
+curl -X POST "https://your-domain.com/api/v1/sms/send" \
+     -H "Content-Type: application/json" \
+     -H "x-api-key: sms_secret_api_key_2026" \
+     -d '{
+       "recipient": "+6281234567890",
+       "message": "Test SMS Gateway via cURL",
+       "priority": 1
+     }'
+```
 
 ---
 
-## 8. Web Dashboard & Monitoring Interaktif
+## 11. Web Dashboard & Monitoring Interaktif
 
-Dashboard interaktif dapat diakses langsung melalui browser di:
-- `https://domain-anda.com/sms/`
+Akses Dashboard di browser: `https://your-domain.com/`
 
-### Fitur Dashboard:
-1. **Live Analytics Cards:** Total Dispatched, Success Delivered, Pending Queue, Gateway Active, dan status Firebase FCM.
-2. **Device Pairing Modal (QR Code & 6-Digit Code):** Memudahkan onboarding HP Android baru dengan scan instan.
-3. **Send Test SMS Panel:** Menguji kirim SMS langsung dari browser dengan pengaturan nomor HP, pesan, dan prioritas.
-4. **SMS Dispatch Queue Table:** Memantau status real-time setiap SMS. Dilengkapi tombol **Requeue (Reset)** untuk kirim ulang pesan yang tertunda/gagal dan tombol **Hapus**.
-5. **Gateway Devices & Phone Lines:** Melihat status online/offline HP, level baterai, status charging, nomor SIM, operator, dan token FCM.
-6. **SMS Inbox (Two-Way):** Membaca seluruh SMS balasan yang masuk ke nomor HP gateway.
+**Fitur Dashboard**:
+1. **Status Dispatcher & FCM Live**: Menampilkan metode aktif (`USE_FIREBASE=true`, `USE_SSE=true`, dll).
+2. **Statistik Antrean Real-Time**: Total SMS, Delivered, Pending, Sending, dan SIM lines terdaftar.
+3. **Generator Kode Pairing & QR Code**: Mempermudah proses koneksi HP Android tanpa input manual.
+4. **Interactive Test SMS Sender**: Fitur uji coba kirim SMS langsung dari browser lengkap dengan preset OTP & Notifikasi.
+5. **Aksi Perangkat**: Enable, Disable, Revoke Token, dan Hapus Perangkat.
+6. **Kirim Ulang (Requeue)**: Reset status SMS ke PENDING dan otomatis menembakkan sinyal push ulang ke Android.
+7. **Tombol 'Run Worker'**: Membersihkan *stale claimed jobs* dan melepaskan antrean retry secara manual.
 
 ---
 
-## 9. Panduan Logging & Troubleshooting
+## 12. Troubleshooting & Solusi Error Umum
 
-### Lokasi File Log:
-Seluruh aktivitas sistem dicatat pada folder:
-```bash
-writable/logs/log-YYYY-MM-DD.log
-```
+| Masalah / Error | Kemungkinan Penyebab | Solusi |
+| :--- | :--- | :--- |
+| **HTTP 401 Unauthorized** | `x-api-key` salah atau tidak dikirimkan di header. | Pastikan header `x-api-key` sesuai dengan nilai `app.smsApiKey` pada `.env`. |
+| **FCM: Service Account Not Found** | File JSON kredensial Firebase belum ditaruh di folder `writable/firebase/`. | Unduh *Service Account Private Key* dari Firebase Console dan simpan ke `writable/firebase/service-account.json`. |
+| **SMS Tertahan di Status PENDING** | Tidak ada HP Android yang online atau FCM token belum terdaftar. | Buka aplikasi Android Gateway, pastikan HP memiliki koneksi internet dan terdaftar di tab **SIM Lines & FCM**. |
+| **Device Muncul Duplikat** | Device ID berganti saat update token. | Sistem kini otomatis melakukan deduplikasi berdasarkan `phone_number`. Lakukan revoke dan pairing ulang jika diperlukan. |
+| **Database Connection Refused** | Konfigurasi MySQL di `.env` belum sesuai atau port tertutup. | Periksa host, username, password, dan nama database di `.env`, lalu pastikan service MySQL berjalan (`sudo systemctl status mysql`). |
 
-### 1. Memantau Log Secara Real-Time (Live Tail):
-Jalankan perintah berikut di terminal server:
-```bash
-tail -f writable/logs/log-$(date +%Y-%m-%d).log
-```
+---
 
-### 2. Membaca 100 Baris Log Terakhir:
-```bash
-tail -n 100 writable/logs/log-$(date +%Y-%m-%d).log
-```
-
-### 3. Masalah Umum & Solusi:
-
-| Gejala Error | Penyebab | Solusi |
-|---|---|---|
-| `401 UNAUTHORIZED_API_CLIENT` saat Android kirim heartbeat | Rute terhalang filter API key server | Sudah teratasi di versi terbaru; jalankan `git pull origin main`. |
-| `[FCM Legacy] FAILED HTTP 404` | Google telah mematikan endpoint FCM legacy | Upload file `service-account.json` (FCM HTTP v1) ke `writable/firebase/service-account.json`. |
-| `[DEPRECATED] Passing lowercase HTTP method` | Method `match()` CI4 menggunakan huruf kecil | Sudah teratasi menggunakan uppercase `['GET', 'POST']`; jalankan `git pull origin main`. |
-| Pesan status `PENDING` tidak terkirim ke HP | Token FCM HP belum masuk atau Firebase belum diset | Cek tabel *Phone Lines* di dashboard, pastikan token FCM HP terdaftar dan status FCM `Active (HTTP_V1)`. |
-| `Unable to prepare statement: no such table` | Database SQLite baru belum dimigrasi | Jalankan `php spark migrate` di terminal server. |
+*Dokumentasi ini dikelola secara berkala untuk rilis v2.0.*
