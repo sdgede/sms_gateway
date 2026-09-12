@@ -15,10 +15,11 @@ Backend SMS Gateway modern berbasis CodeIgniter 4 yang menghubungkan aplikasi An
 
 ---
 
-## 📚 Dokumentasi API & Integrasi
+## 📚 Dokumentasi Lengkap & Panduan Integrasi
 
-Untuk panduan lengkap API endpoint Android, format payload FCM, dan integrasi REST API, silakan baca:
-👉 **[ANDROID_API_DOCUMENTATION.md](ANDROID_API_DOCUMENTATION.md)**
+Untuk panduan lengkap arsitektur sistem, seluruh endpoint REST API Android & Server, setup Firebase HTTP v1, dan troubleshooting, silakan baca:
+👉 **[DOKUMENTASI_LENGKAP.md](DOKUMENTASI_LENGKAP.md)** *(Panduan Lengkap Semua Endpoint & Fitur)*  
+👉 **[ANDROID_API_DOCUMENTATION.md](ANDROID_API_DOCUMENTATION.md)** *(Spesifikasi Kontrak Android & FCM)*
 
 ---
 
