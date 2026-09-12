@@ -50,7 +50,7 @@ $RECYCLE.BIN/
 Vagrantfile
 
 #-------------------------
-# Temporary Files
+# Temporary & Upload Files
 #-------------------------
 /writable/cache/*
 !/writable/cache/index.html
@@ -64,13 +64,26 @@ Vagrantfile
 /writable/uploads/*
 !/writable/uploads/index.html
 
-/writable/firebase/*
-!/writable/firebase/index.html
-
 /writable/debugbar/*
 !/writable/debugbar/index.html
 
 php_errors.log
+
+#-------------------------
+# Firebase & Cloud Credentials
+#-------------------------
+# Never commit Firebase Service Account keys or API credentials
+/firebase/*
+*.service-account.json
+*service-account*.json
+*service_account*.json
+*firebase-adminsdk*.json
+google-services.json
+service-account.json
+credentials.json
+/writable/firebase/*
+!/writable/firebase/index.html
+!/writable/firebase/.gitkeep
 
 #-------------------------
 # User Guide Temp Files
