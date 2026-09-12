@@ -84,10 +84,10 @@ graph TB
     SSE -->|Stream Job| Android1
     WS -->|Instant Event| Android1
     
-    Android1 -->|GET /v1/messages/outstanding| MobCtrl
+    Android1 -->|Fetch Outstanding Job| MobCtrl
     Android1 -->|Kirim SMS Pulsa Seluler| BTS
     BTS --> CustomerHandset
-    Android1 -->|POST /v1/messages/events (SENT/DELIVERED)| MobCtrl
+    Android1 -->|Lapor Event SENT atau DELIVERED| MobCtrl
 ```
 
 ---
@@ -201,41 +201,41 @@ erDiagram
 
 ```mermaid
 flowchart TD
-    Start([Klien Mengirim Request Kirim SMS]) --> CheckIdempotency{Apakah client_message_id<br/>sudah pernah ada di database?}
+    Start(["Klien Mengirim Request Kirim SMS"]) --> CheckIdempotency{"Apakah client_message_id sudah ada di database?"}
     
-    CheckIdempotency -- Ya (Duplikat) --> ReturnReplay[Kembalikan Data Job yang Sudah Ada<br/>HTTP 200 Idempotent]
-    CheckIdempotency -- Tidak (Pesan Baru) --> InsertJob[Simpan ke Tabel sms_jobs<br/>Status: PENDING, Attempt: 0]
+    CheckIdempotency -- "Ya (Duplikat)" --> ReturnReplay["Kembalikan Data Job yang Ada (HTTP 200 Idempotent)"]
+    CheckIdempotency -- "Tidak (Baru)" --> InsertJob["Simpan ke Tabel sms_jobs (Status: PENDING, Attempt: 0)"]
     
-    InsertJob --> CheckDispatchConfig{Cek Konfigurasi .env<br/>Metode Pengiriman Aktif}
+    InsertJob --> CheckDispatchConfig{"Cek Konfigurasi .env Metode Aktif"}
     
-    CheckDispatchConfig -- USE_FIREBASE=true --> SelectTarget[Pilih 1 Device / SIM Line Aktif<br/>(Bukan Broadcast)]
-    SelectTarget --> TriggerFCM[Tembak Push Data FCM v1<br/>Payload: KEY_MESSAGE_ID]
-    TriggerFCM --> AndroidWakeup[Android Menerima Silent Push FCM]
+    CheckDispatchConfig -- "USE_FIREBASE=true" --> SelectTarget["Pilih 1 Device / SIM Line Teraktif"]
+    SelectTarget --> TriggerFCM["Tembak Push Data FCM v1 (KEY_MESSAGE_ID)"]
+    TriggerFCM --> AndroidWakeup["Android Menerima Silent Push FCM"]
     
-    CheckDispatchConfig -- USE_SSE=true --> PushSSE[Kirim Event new_sms_job<br/>via HTTP SSE Stream]
+    CheckDispatchConfig -- "USE_SSE=true" --> PushSSE["Kirim Event new_sms_job via SSE Stream"]
     PushSSE --> AndroidWakeup
     
-    CheckDispatchConfig -- USE_WEBSOCKET=true --> BroadcastWS[Kirim Pesan JSON via WebSocket]
+    CheckDispatchConfig -- "USE_WEBSOCKET=true" --> BroadcastWS["Kirim Pesan JSON via WebSocket"]
     BroadcastWS --> AndroidWakeup
     
-    AndroidWakeup --> FetchJob[Android Request:<br/>GET /v1/messages/outstanding]
-    FetchJob --> LockJob[Server Tandai:<br/>Status: SENDING, Attempt: 1<br/>Assigned Device: dev_xxx]
+    AndroidWakeup --> FetchJob["Android Request: GET /v1/messages/outstanding"]
+    FetchJob --> LockJob["Server Update Status: SENDING, Attempt: 1 (Assigned Device)"]
     
-    LockJob --> AndroidSendSMS[Android Memanggil SmsManager.sendTextMessage<br/>Mengirim Pulsa GSM via SIM1]
+    LockJob --> AndroidSendSMS["Android Memanggil SmsManager.sendTextMessage (SIM1)"]
     
-    AndroidSendSMS --> SentRadio{Apakah Radio BTS Menerima?}
-    SentRadio -- Sukses --> ReportSent[Android Kirim Event SENT:<br/>POST /v1/messages/:id/events]
-    ReportSent --> UpdateSent[Server Update Status: SENT<br/>Simpan ke Delivery Report]
+    AndroidSendSMS --> SentRadio{"Apakah Radio BTS Menerima?"}
+    SentRadio -- "Ya" --> ReportSent["Android Kirim Event: SENT"]
+    ReportSent --> UpdateSent["Server Update Status: SENT"]
     
-    SentRadio -- Gagal --> ReportFailed[Android Kirim Event FAILED]
-    ReportFailed --> RetryLogic{Attempt < Max Attempt?}
-    RetryLogic -- Ya --> SetRetry[Server Set Status: RETRY<br/>Backoff Delay: 30s/5m/15m]
-    RetryLogic -- Tidak --> SetFailedPerm[Server Set Status: FAILED_PERMANENT]
+    SentRadio -- "Gagal" --> ReportFailed["Android Kirim Event: FAILED"]
+    ReportFailed --> RetryLogic{"Attempt < Max Attempt?"}
+    RetryLogic -- "Ya" --> SetRetry["Server Set Status: RETRY (Backoff Delay: 30s/5m/15m)"]
+    RetryLogic -- "Tidak" --> SetFailedPerm["Server Set Status: FAILED_PERMANENT"]
     
-    UpdateSent --> HandsetDelivered{Apakah HP Tujuan Menerima SMS?<br/>Delivery PDU}
-    HandsetDelivered -- Ya --> ReportDelivered[Android Kirim Event DELIVERED]
-    ReportDelivered --> UpdateDelivered[Server Update Status: DELIVERED]
-    HandsetDelivered -- Tidak / Kadaluarsa --> EndNode([Selesai])
+    UpdateSent --> HandsetDelivered{"Apakah HP Tujuan Menerima SMS?"}
+    HandsetDelivered -- "Ya" --> ReportDelivered["Android Kirim Event: DELIVERED"]
+    ReportDelivered --> UpdateDelivered["Server Update Status: DELIVERED"]
+    HandsetDelivered -- "Tidak / Timeout" --> EndNode(["Selesai"])
     UpdateDelivered --> EndNode
     ReturnReplay --> EndNode
     SetFailedPerm --> EndNode
