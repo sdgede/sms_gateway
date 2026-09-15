@@ -53,6 +53,9 @@ class DashboardController extends BaseController
      */
     public function getLiveData(): ResponseInterface
     {
+        // Auto-advance and dispatch ready pending jobs whose scheduled interval has arrived
+        $this->jobModel->dispatchReadyPendingJobs(2);
+
         // 1. Android Gateway Devices with computed online/offline status
         $gateways = $this->gatewayModel->orderBy('id', 'DESC')->findAll();
         $now = time();
@@ -484,8 +487,9 @@ class DashboardController extends BaseController
     {
         $recovered = $this->jobModel->recoverStaleClaims();
         $retried = $this->jobModel->processRetries();
+        $dispatched = $this->jobModel->dispatchReadyPendingJobs(10);
 
-        $msg = "Worker maintenance selesai: {$recovered} job stale di-recover, {$retried} job retry dirilis ke PENDING.";
+        $msg = "Worker selesai: {$recovered} job stale di-recover, {$retried} job retry dirilis, {$dispatched} pesan siap dikirim/di-push ke HP.";
 
         return $this->response->setJSON([
             'status'  => 'success',
@@ -493,6 +497,7 @@ class DashboardController extends BaseController
             'data'    => [
                 'recovered_claims' => $recovered,
                 'released_retries' => $retried,
+                'dispatched_jobs'  => $dispatched,
             ],
         ]);
     }

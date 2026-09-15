@@ -153,6 +153,31 @@ class SmsJobModel extends Model
     }
 
     /**
+     * Automatically scan and dispatch any ready PENDING jobs whose available_at <= NOW
+     */
+    public function dispatchReadyPendingJobs(int $limit = 3): int
+    {
+        // Auto process any ready retries and stale claims on-the-fly
+        $this->processRetries();
+        $this->recoverStaleClaims();
+
+        $now = date('Y-m-d H:i:s');
+        $readyJobs = $this->where('status', self::STATUS_PENDING)
+            ->where('available_at <=', $now)
+            ->orderBy('priority', 'ASC')
+            ->orderBy('id', 'ASC')
+            ->findAll($limit);
+
+        $dispatched = 0;
+        foreach ($readyJobs as $job) {
+            \App\Libraries\SmsDispatcher::dispatchJob($job);
+            $dispatched++;
+        }
+
+        return $dispatched;
+    }
+
+    /**
      * Fetch next available pending job(s)
      */
     public function getNextAvailableJobs(int $limit = 5): array

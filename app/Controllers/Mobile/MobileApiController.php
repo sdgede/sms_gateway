@@ -313,6 +313,9 @@ class MobileApiController extends BaseController
             'reported_at'             => $now,
         ]);
 
+        // Auto-advance: dispatch the next ready pending job in queue
+        $this->jobModel->dispatchReadyPendingJobs(1);
+
         return $this->response->setStatusCode(200)->setJSON([
             'data'    => null,
             'message' => 'ok',
