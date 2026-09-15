@@ -96,27 +96,33 @@ final class HomeDashboardTest extends CIUnitTestCase
             'message'   => 'P2P Test 2',
             'status'    => 'SENT',
         ]);
+        $jobModel->createJob([
+            'recipient' => '+628222222222',
+            'message'   => 'P2P Test 3',
+            'status'    => 'DELIVERED',
+        ]);
 
-        // Test bulk resend with clone_new mode and 3-second interval
+        // Test bulk resend with clone_new mode, unique_recipients scope and 30-second interval
         $res = $this->withBody(json_encode([
-            'interval'  => 3,
+            'interval'  => 30,
             'mode'      => 'clone_new',
-            'recipient' => '+628111111111',
+            'scope'     => 'unique_recipients',
             'limit'     => 10,
         ]))->post('web/sms/bulk-resend');
 
         $res->assertStatus(200);
         $resJson = json_decode($res->getJSON(), true);
         $this->assertEquals('success', $resJson['status']);
-        $this->assertEquals(2, $resJson['data']['total']);
-        $this->assertEquals(3, $resJson['data']['interval_seconds']);
+        $this->assertEquals(2, $resJson['data']['total']); // 2 unique recipients
+        $this->assertEquals(30, $resJson['data']['interval_seconds']);
         $this->assertEquals('clone_new', $resJson['data']['mode']);
-        $this->assertEquals(3, $resJson['data']['estimated_seconds']);
+        $this->assertEquals(30, $resJson['data']['estimated_seconds']); // (2 - 1) * 30 = 30s
 
-        // Test bulk resend with reset_existing mode
+        // Test bulk resend with 60-second interval and reset_existing mode
         $resReset = $this->withBody(json_encode([
-            'interval' => 5,
+            'interval' => 60,
             'mode'     => 'reset_existing',
+            'scope'    => 'all_jobs',
             'limit'    => 5,
         ]))->post('web/sms/bulk-resend');
 
@@ -125,5 +131,6 @@ final class HomeDashboardTest extends CIUnitTestCase
         $this->assertEquals('success', $resetJson['status']);
         $this->assertGreaterThanOrEqual(1, $resetJson['data']['total']);
         $this->assertEquals('reset_existing', $resetJson['data']['mode']);
+        $this->assertEquals(60, $resetJson['data']['interval_seconds']);
     }
 }

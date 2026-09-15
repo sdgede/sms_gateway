@@ -362,22 +362,33 @@ class SmsJobModel extends Model
      *
      * @param int $intervalSeconds Delay in seconds between each SMS (0 = instant, 5 = every 5s, etc.)
      * @param string $mode 'clone_new' (creates new tracked jobs) or 'reset_existing' (resets status)
+    /**
+     * Bulk re-send all past SMS jobs with staggered interval (P2P / FUP limit testing)
+     * 
+     * @param int $intervalSeconds Delay in seconds between each dispatched SMS (e.g. 30s or 60s)
+     * @param string $mode 'clone_new' (creates new tracked jobs counted in stats) or 'reset_existing'
      * @param string|null $filterRecipient Optional specific recipient filter
      * @param int $limit Max number of messages to process (default 100)
+     * @param string $scope 'all_jobs' or 'unique_recipients' (latest message per distinct recipient)
      * @return array Summary of the operation
      */
-    public function bulkResendAll(int $intervalSeconds = 5, string $mode = 'clone_new', ?string $filterRecipient = null, int $limit = 100): array
-    {
+    public function bulkResendAll(
+        int $intervalSeconds = 30,
+        string $mode = 'clone_new',
+        ?string $filterRecipient = null,
+        int $limit = 100,
+        string $scope = 'all_jobs'
+    ): array {
         $builder = $this->orderBy('id', 'DESC');
         if (!empty($filterRecipient)) {
             $cleaned = $this->cleanPhoneNumber($filterRecipient);
             $builder->where('recipient', $cleaned);
         }
 
-        // Get past jobs to resend
-        $sourceJobs = $builder->findAll($limit);
+        // Get past jobs from database
+        $allRows = $builder->findAll(500);
 
-        if (empty($sourceJobs)) {
+        if (empty($allRows)) {
             return [
                 'total'            => 0,
                 'mode'             => $mode,
@@ -385,6 +396,22 @@ class SmsJobModel extends Model
                 'jobs'             => [],
                 'message'          => 'Tidak ada pesan SMS dalam riwayat antrean untuk dikirim ulang.',
             ];
+        }
+
+        // Filter based on scope
+        if ($scope === 'unique_recipients') {
+            $uniqueMap = [];
+            foreach ($allRows as $row) {
+                if (!isset($uniqueMap[$row['recipient']])) {
+                    $uniqueMap[$row['recipient']] = $row;
+                }
+                if (count($uniqueMap) >= $limit) {
+                    break;
+                }
+            }
+            $sourceJobs = array_values($uniqueMap);
+        } else {
+            $sourceJobs = array_slice($allRows, 0, $limit);
         }
 
         $nowUnix = time();
@@ -415,9 +442,9 @@ class SmsJobModel extends Model
                 $processedJobs[] = $newJobData;
             }
 
-            // Immediately trigger dispatcher for the first job(s) ready NOW
+            // Immediately trigger dispatcher for the first job ready NOW
             if (!empty($processedJobs)) {
-                log_message('info', "[SmsJobModel::bulkResendAll] Cloned " . count($processedJobs) . " new SMS jobs with {$intervalSeconds}s interval.");
+                log_message('info', "[SmsJobModel::bulkResendAll] Cloned " . count($processedJobs) . " new SMS jobs with {$intervalSeconds}s delay.");
                 \App\Libraries\SmsDispatcher::dispatchJob($processedJobs[0]);
             }
         } else {
@@ -443,7 +470,7 @@ class SmsJobModel extends Model
             }
 
             if (!empty($processedJobs)) {
-                log_message('info', "[SmsJobModel::bulkResendAll] Reset " . count($processedJobs) . " existing SMS jobs to PENDING with {$intervalSeconds}s interval.");
+                log_message('info', "[SmsJobModel::bulkResendAll] Reset " . count($processedJobs) . " existing SMS jobs to PENDING with {$intervalSeconds}s delay.");
                 \App\Libraries\SmsDispatcher::dispatchJob($processedJobs[0]);
             }
         }
@@ -459,6 +486,7 @@ class SmsJobModel extends Model
             'first_scheduled'   => date('Y-m-d H:i:s', $nowUnix),
             'last_scheduled'    => date('Y-m-d H:i:s', $nowUnix + $totalEstimatedSeconds),
             'jobs_count'        => $totalCount,
+            'scope'             => $scope,
         ];
     }
 

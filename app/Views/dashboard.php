@@ -522,8 +522,8 @@
             <div class="fcm-badge" id="fcmStatusBadge">
                 Checking dispatcher...
             </div>
-            <button class="btn btn-primary btn-sm" onclick="openBulkResendModal()" title="Kirim Ulang Semua SMS dengan Jeda Waktu (Uji Limit P2P)">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Kirim Ulang Semua (Uji P2P)
+            <button class="btn btn-primary btn-sm" onclick="openBulkResendModal(30)" title="Kirim Ulang Semua SMS ke Semua Nomor dengan Jeda 30s / 1 Menit (Uji Limit P2P)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Kirim Ulang Semua (Delay 30s / 1m)
             </button>
             <button class="btn btn-secondary btn-sm" onclick="runWorker()">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Run Worker
@@ -689,8 +689,8 @@
                             Riwayat Antrean & Pengiriman SMS
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <button class="btn btn-secondary btn-sm" onclick="openBulkResendModal()" style="padding: 4px 10px; font-size: 11px;">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Kirim Ulang Semua
+                            <button class="btn btn-primary btn-sm" onclick="openBulkResendModal(30)" style="padding: 4px 10px; font-size: 11px;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Kirim Ulang Semua (Delay 30s / 1m)
                             </button>
                             <span class="mono-tag" id="lastUpdatedTag">Updated just now</span>
                         </div>
@@ -1414,21 +1414,27 @@
     // -------------------------------------------------------------
     let currentAvailableJobs = [];
 
-    function openBulkResendModal() {
+    function openBulkResendModal(defaultInterval = 30) {
         // Collect distinct recipients from current jobs
         const select = document.getElementById('bulkRecipientSelect');
         if (select) {
             const currentSelected = select.value;
-            select.innerHTML = '<option value="">-- Semua Nomor Tujuan Terdaftar --</option>';
+            select.innerHTML = '<option value="">-- Semua Nomor yang Pernah Dikirim --</option>';
             const distinctRecipients = [...new Set(currentAvailableJobs.map(j => j.recipient).filter(Boolean))];
             distinctRecipients.forEach(r => {
                 const opt = document.createElement('option');
                 opt.value = r;
-                opt.innerText = `${r} (${currentAvailableJobs.filter(j => j.recipient === r).length} pesan)`;
+                opt.innerText = `${r} (${currentAvailableJobs.filter(j => j.recipient === r).length} riwayat pesan)`;
                 select.appendChild(opt);
             });
             select.value = currentSelected || '';
         }
+        
+        if (defaultInterval) {
+            const intInput = document.getElementById('bulkIntervalInput');
+            if (intInput) intInput.value = defaultInterval;
+        }
+
         updateBulkSummary();
         document.getElementById('bulkResendModal').style.display = 'flex';
     }
@@ -1443,14 +1449,21 @@
     }
 
     function updateBulkSummary() {
-        const interval = parseInt(document.getElementById('bulkIntervalInput')?.value || '5', 10);
-        const limit = parseInt(document.getElementById('bulkLimitInput')?.value || '50', 10);
+        const interval = parseInt(document.getElementById('bulkIntervalInput')?.value || '30', 10);
+        const limit = parseInt(document.getElementById('bulkLimitInput')?.value || '100', 10);
         const recipient = document.getElementById('bulkRecipientSelect')?.value || '';
+        const scope = document.querySelector('input[name="bulkScope"]:checked')?.value || 'unique_recipients';
         
-        let count = currentAvailableJobs.length || 0;
+        let count = 0;
         if (recipient) {
             count = currentAvailableJobs.filter(j => j.recipient === recipient).length;
+        } else if (scope === 'unique_recipients') {
+            const uniqueRecipients = new Set(currentAvailableJobs.map(j => j.recipient).filter(Boolean));
+            count = uniqueRecipients.size || (currentAvailableJobs.length > 0 ? 1 : 0);
+        } else {
+            count = currentAvailableJobs.length || 0;
         }
+
         const actualCount = Math.min(count || 1, limit);
         const totalSecs = Math.max(0, (actualCount - 1) * (interval || 0));
         
@@ -1463,21 +1476,29 @@
 
         const summaryEl = document.getElementById('bulkSummaryText');
         if (summaryEl) {
-            summaryEl.innerHTML = `Akan memproses <strong>${actualCount} pesan SMS</strong> dengan jeda <strong>${interval} detik</strong> per SMS.<br><span style="color: #818cf8;">Estimasi total durasi: <strong>${durStr}</strong></span>`;
+            const scopeLabel = scope === 'unique_recipients' ? 'nomor tujuan unik' : 'pesan antrean';
+            summaryEl.innerHTML = `Akan mengirim ulang ke <strong>${actualCount} ${scopeLabel}</strong> dengan jeda <strong>${interval} detik</strong> (${interval >= 60 ? (interval/60) + ' menit' : interval + 's'}) per SMS.<br><span style="color: #818cf8; font-size: 13px;">Estimasi total durasi: <strong>${durStr}</strong></span>`;
         }
     }
 
-    async function handleBulkResendSubmit(e) {
-        e.preventDefault();
-        const interval = parseInt(document.getElementById('bulkIntervalInput').value || '5', 10);
+    async function handleBulkResendSubmit(e, customInterval = null) {
+        if (e && e.preventDefault) e.preventDefault();
+
+        let interval = parseInt(document.getElementById('bulkIntervalInput').value || '30', 10);
+        if (customInterval !== null) {
+            interval = customInterval;
+            document.getElementById('bulkIntervalInput').value = customInterval;
+        }
+
         const mode = document.querySelector('input[name="bulkMode"]:checked')?.value || 'clone_new';
+        const scope = document.querySelector('input[name="bulkScope"]:checked')?.value || 'unique_recipients';
         const recipient = document.getElementById('bulkRecipientSelect').value || '';
-        const limit = parseInt(document.getElementById('bulkLimitInput').value || '50', 10);
+        const limit = parseInt(document.getElementById('bulkLimitInput').value || '100', 10);
 
         const btn = document.getElementById('btnSubmitBulk');
         if (btn) {
             btn.disabled = true;
-            btn.innerText = 'Menjadwalkan...';
+            btn.innerText = 'Menjadwalkan Antrean...';
         }
 
         try {
@@ -1487,6 +1508,7 @@
                 body: JSON.stringify({
                     interval: interval,
                     mode: mode,
+                    scope: scope,
                     recipient: recipient,
                     limit: limit
                 })
@@ -1524,84 +1546,106 @@
 
 <!-- Bulk Resend / P2P Limit Testing Modal -->
 <div id="bulkResendModal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(8px); z-index: 99999; align-items: center; justify-content: center; padding: 20px;" onclick="if(event.target === this) closeBulkResendModal()">
-    <div style="background: #121826; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; padding: 28px; max-width: 480px; width: 100%; box-shadow: 0 25px 60px rgba(0,0,0,0.8); position: relative; animation: slideIn 0.25s ease;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+    <div style="background: #121826; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; padding: 28px; max-width: 520px; width: 100%; box-shadow: 0 25px 60px rgba(0,0,0,0.8); position: relative; animation: slideIn 0.25s ease;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
             <div style="display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: #fff;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                Kirim Ulang Semua SMS (Uji P2P)
+                Kirim Ulang Semua SMS (Uji Limit P2P)
             </div>
-            <button onclick="closeBulkResendModal()" style="background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 18px; padding: 4px;">&times;</button>
+            <button onclick="closeBulkResendModal()" style="background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 20px; padding: 4px;">&times;</button>
         </div>
 
         <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 18px; line-height: 1.5;">
-            Fitur ini mengantrekan pengiriman ulang pesan dengan <strong>jeda waktu (interval)</strong> teratur. Cocok untuk menguji batas pengiriman (P2P / FUP limit) kartu SIM operator seluler Anda.
+            Kirim ulang SMS ke semua nomor yang pernah dihubungi dengan <strong>jeda waktu 30 detik atau 1 menit per pesan</strong>. Setiap SMS akan otomatis dijadwalkan dan tetap terhitung dalam statistik.
         </p>
 
         <form id="bulkResendForm" onsubmit="handleBulkResendSubmit(event)">
-            <!-- Mode Selection -->
-            <div class="form-group" style="margin-bottom: 16px;">
-                <label style="font-weight: 600; color: var(--text-main); font-size: 12px; margin-bottom: 8px; display: block;">Mode Pengiriman</label>
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <label style="display: flex; align-items: flex-start; gap: 10px; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 10px; padding: 10px 12px; cursor: pointer;">
-                        <input type="radio" name="bulkMode" value="clone_new" checked onchange="updateBulkSummary()" style="margin-top: 2px;">
+            <!-- Target Scope Selection -->
+            <div class="form-group" style="margin-bottom: 14px;">
+                <label style="font-weight: 600; color: var(--text-main); font-size: 12px; margin-bottom: 6px; display: block;">Target Penerima</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <label style="display: flex; align-items: flex-start; gap: 8px; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 10px; padding: 8px 10px; cursor: pointer;">
+                        <input type="radio" name="bulkScope" value="unique_recipients" checked onchange="updateBulkSummary()" style="margin-top: 2px;">
                         <div>
-                            <div style="font-size: 12px; font-weight: 600; color: #fff;">Buat Antrean Baru (Disarankan)</div>
-                            <div style="font-size: 11px; color: var(--text-dim);">Setiap SMS dibuat sebagai Job baru sehingga <strong>tetap terhitung dalam statistik total</strong> & riwayat pengiriman.</div>
+                            <div style="font-size: 11px; font-weight: 600; color: #fff;">Semua Nomor Unik</div>
+                            <div style="font-size: 10px; color: var(--text-dim);">Pesan terakhir ke tiap nomor</div>
                         </div>
                     </label>
-                    <label style="display: flex; align-items: flex-start; gap: 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; cursor: pointer;">
-                        <input type="radio" name="bulkMode" value="reset_existing" onchange="updateBulkSummary()" style="margin-top: 2px;">
+                    <label style="display: flex; align-items: flex-start; gap: 8px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 10px; cursor: pointer;">
+                        <input type="radio" name="bulkScope" value="all_jobs" onchange="updateBulkSummary()" style="margin-top: 2px;">
                         <div>
-                            <div style="font-size: 12px; font-weight: 600; color: #fff;">Reset Antrean yang Ada</div>
-                            <div style="font-size: 11px; color: var(--text-dim);">Hanya me-reset status pesan yang sudah ada kembali ke PENDING.</div>
+                            <div style="font-size: 11px; font-weight: 600; color: #fff;">Semua Riwayat Pesan</div>
+                            <div style="font-size: 10px; color: var(--text-dim);">Seluruh isi antrean</div>
                         </div>
                     </label>
                 </div>
             </div>
 
-            <!-- Interval Input -->
+            <!-- Jeda / Interval Input -->
             <div class="form-group" style="margin-bottom: 16px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <label style="margin: 0; font-weight: 600;">Jeda Waktu Antar Pesan (Detik)</label>
-                    <span style="font-size: 11px; color: var(--text-dim);">Interval per SMS</span>
+                    <label style="margin: 0; font-weight: 600; font-size: 12px;">Jeda Waktu Antar Pesan (Detik)</label>
+                    <span style="font-size: 11px; color: #818cf8; font-weight: 600;">Standar P2P: 30s - 60s</span>
                 </div>
-                <input type="number" id="bulkIntervalInput" class="form-control" value="5" min="0" max="3600" oninput="updateBulkSummary()" required style="font-size: 15px; font-weight: 700; color: #818cf8;">
+                <input type="number" id="bulkIntervalInput" class="form-control" value="30" min="0" max="3600" oninput="updateBulkSummary()" required style="font-size: 16px; font-weight: 700; color: #818cf8; text-align: center;">
                 <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">
-                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="setBulkInterval(0)">0s (Instan)</button>
-                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="setBulkInterval(2)">2s</button>
-                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="setBulkInterval(5)">5s</button>
-                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="setBulkInterval(10)">10s</button>
-                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="setBulkInterval(30)">30s</button>
-                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="setBulkInterval(60)">60s</button>
+                    <button type="button" class="btn btn-primary btn-sm" style="padding: 4px 10px; font-size: 11px; font-weight: 600;" onclick="setBulkInterval(30)">⚡ 30 Detik (Standar)</button>
+                    <button type="button" class="btn btn-primary btn-sm" style="padding: 4px 10px; font-size: 11px; font-weight: 600; background: rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.5); color: #34d399;" onclick="setBulkInterval(60)">⏱️ 1 Menit (60s)</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="setBulkInterval(90)">90 Detik</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="setBulkInterval(120)">2 Menit</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="setBulkInterval(15)">15s</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="setBulkInterval(0)">0s (Instan)</button>
                 </div>
             </div>
 
-            <!-- Target Recipient Filter -->
-            <div class="form-group" style="margin-bottom: 16px;">
-                <label>Target Nomor Penerima</label>
-                <select id="bulkRecipientSelect" class="form-control" onchange="updateBulkSummary()">
-                    <option value="">-- Semua Nomor Tujuan Terdaftar --</option>
-                </select>
+            <!-- Mode Selection -->
+            <div class="form-group" style="margin-bottom: 14px;">
+                <label style="font-weight: 600; color: var(--text-main); font-size: 12px; margin-bottom: 6px; display: block;">Mode Antrean</label>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="display: flex; align-items: flex-start; gap: 8px; background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 8px; padding: 8px 10px; cursor: pointer;">
+                        <input type="radio" name="bulkMode" value="clone_new" checked onchange="updateBulkSummary()" style="margin-top: 2px;">
+                        <div>
+                            <div style="font-size: 11px; font-weight: 600; color: #fff;">Buat Antrean Baru (Tetap Terhitung di Statistik Total)</div>
+                        </div>
+                    </label>
+                    <label style="display: flex; align-items: flex-start; gap: 8px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 10px; cursor: pointer;">
+                        <input type="radio" name="bulkMode" value="reset_existing" onchange="updateBulkSummary()" style="margin-top: 2px;">
+                        <div>
+                            <div style="font-size: 11px; font-weight: 600; color: #fff;">Reset Status Pesan Lama (Kembali ke PENDING)</div>
+                        </div>
+                    </label>
+                </div>
             </div>
 
-            <!-- Limit Input -->
-            <div class="form-group" style="margin-bottom: 18px;">
-                <label>Maksimal Jumlah Pesan yang Diproses</label>
-                <input type="number" id="bulkLimitInput" class="form-control" value="50" min="1" max="500" oninput="updateBulkSummary()">
+            <!-- Target Recipient Filter & Limit -->
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-bottom: 14px;">
+                <div class="form-group" style="margin: 0;">
+                    <label style="font-size: 11px;">Filter Nomor (Opsional)</label>
+                    <select id="bulkRecipientSelect" class="form-control" onchange="updateBulkSummary()" style="font-size: 12px;">
+                        <option value="">-- Semua Nomor yang Pernah Dikirim --</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label style="font-size: 11px;">Maksimal SMS</label>
+                    <input type="number" id="bulkLimitInput" class="form-control" value="100" min="1" max="500" oninput="updateBulkSummary()" style="font-size: 12px;">
+                </div>
             </div>
 
             <!-- Summary Box -->
-            <div style="background: rgba(99, 102, 241, 0.1); border: 1px dashed rgba(99, 102, 241, 0.4); border-radius: 12px; padding: 12px 14px; margin-bottom: 20px; font-size: 12px; color: var(--text-main); line-height: 1.5;">
+            <div style="background: rgba(99, 102, 241, 0.1); border: 1px dashed rgba(99, 102, 241, 0.4); border-radius: 12px; padding: 12px 14px; margin-bottom: 18px; font-size: 12px; color: var(--text-main); line-height: 1.5;">
                 <div id="bulkSummaryText">
                     Memuat ringkasan estimasi...
                 </div>
             </div>
 
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <div style="display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;">
                 <button type="button" class="btn btn-secondary" onclick="closeBulkResendModal()">Batal</button>
+                <button type="button" class="btn btn-secondary" style="border-color: rgba(16, 185, 129, 0.5); color: #34d399;" onclick="handleBulkResendSubmit(event, 60)">
+                    ⏱️ Kirim (Jeda 1 Menit)
+                </button>
                 <button type="submit" id="btnSubmitBulk" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 6px;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    Mulai Kirim Ulang Massal
+                    ⚡ Kirim (Jeda 30 Detik)
                 </button>
             </div>
         </form>
