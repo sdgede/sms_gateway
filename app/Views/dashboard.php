@@ -1052,7 +1052,7 @@
                             <span class="mono-tag">${j.attempt}/${j.max_attempt}</span>
                         </td>
                         <td>
-                            <span class="mono-tag">${escapeHtml(j.assigned_device_id || '-')}</span>
+                            <span class="mono-tag" style="${j.assigned_device_id ? 'color: #818cf8; font-weight: 600;' : 'color: var(--text-dim);'}">${escapeHtml(j.assigned_device_id || 'Auto-Dispatch')}</span>
                         </td>
                         <td>
                             <div style="font-size: 11px; color: var(--text-muted);">${j.created_at || '-'}</div>

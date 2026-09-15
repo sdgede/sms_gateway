@@ -47,6 +47,47 @@ class SmsJobModel extends Model
     public const STATUS_FAILED_PERMANENT = 'FAILED_PERMANENT';
 
     /**
+     * Resolve the best currently active/connected Android device identifier
+     */
+    public function resolveActiveDeviceId(): ?string
+    {
+        // 1. Check sms_gateways for ONLINE/active device
+        $gwModel = new \App\Models\SmsGatewayModel();
+        $gateways = $gwModel->where('status !=', 'DISABLED')
+            ->orderBy('last_seen_at', 'DESC')
+            ->findAll(10);
+        
+        $now = time();
+        foreach ($gateways as $gw) {
+            if (!empty($gw['last_seen_at'])) {
+                $lastSeenSecs = $now - strtotime($gw['last_seen_at']);
+                if ($lastSeenSecs <= 300) {
+                    return $gw['phone_number'] ?: $gw['device_name'] ?: $gw['device_id'];
+                }
+            }
+        }
+
+        if (!empty($gateways)) {
+            $first = $gateways[0];
+            return $first['phone_number'] ?: $first['device_name'] ?: $first['device_id'];
+        }
+
+        // 2. Check sms_phone_lines for registered FCM line
+        $phoneLineModel = new \App\Models\SmsPhoneLineModel();
+        $line = $phoneLineModel->where('is_active', 1)
+            ->where('fcm_token IS NOT NULL')
+            ->where('fcm_token !=', '')
+            ->orderBy('updated_at', 'DESC')
+            ->first();
+
+        if ($line) {
+            return $line['phone_number'] ?: $line['device_id'] ?: $line['id'];
+        }
+
+        return null;
+    }
+
+    /**
      * Create or retrieve idempotent SMS Job
      */
     public function createJob(array $payload): array
@@ -67,23 +108,25 @@ class SmsJobModel extends Model
 
         // Format clean phone number
         $recipient = $this->cleanPhoneNumber($payload['recipient']);
+        $assignedDev = $payload['assigned_device_id'] ?? $payload['target_device_id'] ?? $this->resolveActiveDeviceId();
 
         $data = [
-            'job_id'            => $jobId,
-            'client_message_id' => $payload['client_message_id'] ?? null,
-            'recipient'         => $recipient,
-            'message'           => $payload['message'],
-            'status'            => self::STATUS_PENDING,
-            'priority'          => isset($payload['priority']) ? (int)$payload['priority'] : 2,
-            'attempt'           => 0,
-            'max_attempt'       => isset($payload['max_attempt']) ? (int)$payload['max_attempt'] : 3,
-            'available_at'      => date('Y-m-d H:i:s'),
+            'job_id'             => $jobId,
+            'client_message_id'  => $payload['client_message_id'] ?? null,
+            'recipient'          => $recipient,
+            'message'            => $payload['message'],
+            'status'             => self::STATUS_PENDING,
+            'priority'           => isset($payload['priority']) ? (int)$payload['priority'] : 2,
+            'attempt'            => 0,
+            'max_attempt'        => isset($payload['max_attempt']) ? (int)$payload['max_attempt'] : 3,
+            'assigned_device_id' => $assignedDev,
+            'available_at'       => date('Y-m-d H:i:s'),
         ];
 
         $id = $this->insert($data);
         $data['id'] = $id;
 
-        log_message('info', "[SmsJobModel::createJob] Created SMS Job: {$jobId} to Recipient: {$recipient} (Priority: {$data['priority']})");
+        log_message('info', "[SmsJobModel::createJob] Created SMS Job: {$jobId} to Recipient: {$recipient} (Device: " . ($assignedDev ?: 'Unassigned') . ")");
 
         // Dispatch job using active methods configured in .env (Firebase / SSE / WebSocket)
         \App\Libraries\SmsDispatcher::dispatchJob($data);
@@ -416,6 +459,7 @@ class SmsJobModel extends Model
 
         $nowUnix = time();
         $processedJobs = [];
+        $activeDev = $this->resolveActiveDeviceId();
 
         if ($mode === 'clone_new') {
             // Mode 1: Clone into brand new tracked jobs (counted in total_jobs & statistics)
@@ -424,17 +468,19 @@ class SmsJobModel extends Model
                 $scheduledAt = date('Y-m-d H:i:s', $scheduledUnix);
                 $jobId = 'SMS-' . date('YmdHis') . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6));
                 $clientMsgId = 'P2P-RESEND-' . date('YmdHis') . '-' . ($index + 1) . '-' . substr(bin2hex(random_bytes(2)), 0, 4);
+                $assignedDev = $src['assigned_device_id'] ?: $activeDev;
 
                 $newJobData = [
-                    'job_id'            => $jobId,
-                    'client_message_id' => $clientMsgId,
-                    'recipient'         => $src['recipient'],
-                    'message'           => $src['message'],
-                    'status'            => self::STATUS_PENDING,
-                    'priority'          => $src['priority'] ?? 2,
-                    'attempt'           => 0,
-                    'max_attempt'       => $src['max_attempt'] ?? 3,
-                    'available_at'      => $scheduledAt,
+                    'job_id'             => $jobId,
+                    'client_message_id'  => $clientMsgId,
+                    'recipient'          => $src['recipient'],
+                    'message'            => $src['message'],
+                    'status'             => self::STATUS_PENDING,
+                    'priority'           => $src['priority'] ?? 2,
+                    'attempt'            => 0,
+                    'max_attempt'        => $src['max_attempt'] ?? 3,
+                    'assigned_device_id' => $assignedDev,
+                    'available_at'       => $scheduledAt,
                 ];
 
                 $id = $this->insert($newJobData);
@@ -444,7 +490,7 @@ class SmsJobModel extends Model
 
             // Immediately trigger dispatcher for the first job ready NOW
             if (!empty($processedJobs)) {
-                log_message('info', "[SmsJobModel::bulkResendAll] Cloned " . count($processedJobs) . " new SMS jobs with {$intervalSeconds}s delay.");
+                log_message('info', "[SmsJobModel::bulkResendAll] Cloned " . count($processedJobs) . " new SMS jobs with {$intervalSeconds}s delay (Device: " . ($activeDev ?: 'Unassigned') . ").");
                 \App\Libraries\SmsDispatcher::dispatchJob($processedJobs[0]);
             }
         } else {
@@ -452,11 +498,12 @@ class SmsJobModel extends Model
             foreach ($sourceJobs as $index => $src) {
                 $scheduledUnix = $nowUnix + ($index * $intervalSeconds);
                 $scheduledAt = date('Y-m-d H:i:s', $scheduledUnix);
+                $assignedDev = $src['assigned_device_id'] ?: $activeDev;
 
                 $this->update($src['id'], [
                     'status'             => self::STATUS_PENDING,
                     'available_at'       => $scheduledAt,
-                    'assigned_device_id' => null,
+                    'assigned_device_id' => $assignedDev,
                     'claimed_at'         => null,
                     'claim_expires_at'   => null,
                     'attempt'            => 0,
@@ -466,11 +513,12 @@ class SmsJobModel extends Model
 
                 $src['status'] = self::STATUS_PENDING;
                 $src['available_at'] = $scheduledAt;
+                $src['assigned_device_id'] = $assignedDev;
                 $processedJobs[] = $src;
             }
 
             if (!empty($processedJobs)) {
-                log_message('info', "[SmsJobModel::bulkResendAll] Reset " . count($processedJobs) . " existing SMS jobs to PENDING with {$intervalSeconds}s delay.");
+                log_message('info', "[SmsJobModel::bulkResendAll] Reset " . count($processedJobs) . " existing SMS jobs to PENDING with {$intervalSeconds}s delay (Device: " . ($activeDev ?: 'Unassigned') . ").");
                 \App\Libraries\SmsDispatcher::dispatchJob($processedJobs[0]);
             }
         }

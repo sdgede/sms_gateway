@@ -307,18 +307,21 @@ class DashboardController extends BaseController
         }
 
         $now = date('Y-m-d H:i:s');
+        $assignedDev = $job['assigned_device_id'] ?: $this->jobModel->resolveActiveDeviceId();
+
         $this->jobModel->update($job['id'], [
             'status'             => SmsJobModel::STATUS_PENDING,
             'available_at'       => $now,
-            'assigned_device_id' => null,
+            'assigned_device_id' => $assignedDev,
             'claimed_at'         => null,
             'claim_expires_at'   => null,
             'attempt'            => 0,
             'failed_reason'      => null,
             'updated_at'         => $now,
         ]);
+        $job['assigned_device_id'] = $assignedDev;
 
-        log_message('info', "[DashboardController::requeueSms] Job {$jobId} reset to PENDING. Triggering dispatch...");
+        log_message('info', "[DashboardController::requeueSms] Job {$jobId} reset to PENDING (Device: " . ($assignedDev ?: 'Unassigned') . "). Triggering dispatch...");
 
         // Dispatch job using active methods configured in .env (Firebase / SSE / WebSocket)
         SmsDispatcher::dispatchJob($job);

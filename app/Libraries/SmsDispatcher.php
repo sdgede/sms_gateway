@@ -106,19 +106,38 @@ class SmsDispatcher
         if ($methods['firebase']) {
             try {
                 $phoneLineModel = new SmsPhoneLineModel();
+                $gatewayModel = new \App\Models\SmsGatewayModel();
                 $jobModel = new \App\Models\SmsJobModel();
                 $targetDev = $job['target_device_id'] ?? $job['assigned_device_id'] ?? null;
 
                 $selectedLine = null;
                 if (!empty($targetDev)) {
-                    // Match specific requested device or phone number
+                    // 1. Direct match by phone_number, device_id, or id in phone lines
                     $selectedLine = $phoneLineModel->where('is_active', 1)
                         ->groupStart()
                             ->where('phone_number', $targetDev)
                             ->orWhere('id', $targetDev)
+                            ->orWhere('device_id', $targetDev)
                         ->groupEnd()
                         ->where('fcm_token IS NOT NULL')
+                        ->where('fcm_token !=', '')
                         ->first();
+
+                    // 2. Cross-match via sms_gateways table
+                    if (!$selectedLine) {
+                        $gw = $gatewayModel->where('device_id', $targetDev)
+                            ->orWhere('phone_number', $targetDev)
+                            ->orWhere('device_name', $targetDev)
+                            ->first();
+
+                        if ($gw && !empty($gw['phone_number'])) {
+                            $selectedLine = $phoneLineModel->where('phone_number', $gw['phone_number'])
+                                ->where('is_active', 1)
+                                ->where('fcm_token IS NOT NULL')
+                                ->where('fcm_token !=', '')
+                                ->first();
+                        }
+                    }
                 }
 
                 if (!$selectedLine) {
@@ -135,7 +154,7 @@ class SmsDispatcher
                 }
 
                 if ($selectedLine && !empty($selectedLine['fcm_token'])) {
-                    $assignedId = $selectedLine['phone_number'] ?: $selectedLine['id'];
+                    $assignedId = $selectedLine['phone_number'] ?: $selectedLine['device_id'] ?: $selectedLine['id'];
                     log_message('info', "[SmsDispatcher] [Method: Firebase] Dispatching Job {$jobId} to SINGLE target line: {$assignedId} (FCM: " . substr($selectedLine['fcm_token'], 0, 20) . "...)");
                     
                     // Pre-assign device to the job record so dashboard displays it immediately
