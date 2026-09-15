@@ -14,6 +14,7 @@ $routes->post('web/pairing/generate', 'Web\DashboardController::generatePairing'
 $routes->post('web/pairing/delete', 'Web\DashboardController::deletePairing');
 $routes->post('web/sms/send', 'Web\DashboardController::sendTestSms');
 $routes->post('web/sms/requeue', 'Web\DashboardController::requeueSms');
+$routes->post('web/sms/bulk-resend', 'Web\DashboardController::bulkResend');
 $routes->post('web/sms/delete', 'Web\DashboardController::deleteSms');
 $routes->post('web/gateway/action', 'Web\DashboardController::gatewayAction');
 $routes->post('web/phone-line/delete', 'Web\DashboardController::deletePhoneLine');

@@ -628,6 +628,7 @@ Akses Dashboard di browser: `https://your-domain.com/`
 5. **Aksi Perangkat**: Enable, Disable, Revoke Token, dan Hapus Perangkat.
 6. **Kirim Ulang (Requeue)**: Reset status SMS ke PENDING dan otomatis menembakkan sinyal push ulang ke Android.
 7. **Tombol 'Run Worker'**: Membersihkan *stale claimed jobs* dan melepaskan antrean retry secara manual.
+8. **Kirim Ulang Semua SMS (Uji Batas P2P / FUP Operator)**: Fitur pengiriman ulang massal terencana dengan jeda/interval waktu terkonfigurasi (misal 2s, 5s, 10s, 30s) untuk pengujian batas limit kartu seluler. Memiliki opsi kloning job baru agar **tetap terhitung dalam statistik total** & riwayat pengiriman.
 
 ---
 

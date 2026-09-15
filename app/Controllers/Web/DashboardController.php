@@ -394,6 +394,73 @@ class DashboardController extends BaseController
     }
 
     /**
+     * Web UI: Bulk Resend / Re-queue All SMS with Staggered Interval (P2P Limit Testing)
+     * POST /web/sms/bulk-resend
+     */
+    public function bulkResend(): ResponseInterface
+    {
+        $raw = $this->request->getJSON(true) ?? $this->request->getPost() ?? [];
+
+        $intervalSeconds = (int)($raw['interval'] ?? $this->request->getVar('interval') ?? 5);
+        if ($intervalSeconds < 0) {
+            $intervalSeconds = 0;
+        }
+        if ($intervalSeconds > 3600) {
+            $intervalSeconds = 3600;
+        }
+
+        $mode = trim((string)($raw['mode'] ?? $this->request->getVar('mode') ?? 'clone_new'));
+        if (!in_array($mode, ['clone_new', 'reset_existing'], true)) {
+            $mode = 'clone_new';
+        }
+
+        $recipient = trim((string)($raw['recipient'] ?? $this->request->getVar('recipient') ?? ''));
+        if (empty($recipient)) {
+            $recipient = null;
+        }
+
+        $limit = (int)($raw['limit'] ?? $this->request->getVar('limit') ?? 100);
+        if ($limit < 1) {
+            $limit = 1;
+        }
+        if ($limit > 500) {
+            $limit = 500;
+        }
+
+        $result = $this->jobModel->bulkResendAll($intervalSeconds, $mode, $recipient, $limit);
+
+        if ($result['total'] === 0) {
+            return $this->response->setStatusCode(400)->setJSON([
+                'status'  => 'error',
+                'message' => 'Tidak ada pesan dalam riwayat antrean untuk dikirim ulang.',
+            ]);
+        }
+
+        $modeLabel = ($mode === 'clone_new') ? 'dibuat sebagai pesan baru (tetap terhitung di statistik)' : 'direset antreannya';
+        $intervalLabel = $intervalSeconds > 0 ? "jeda {$intervalSeconds} detik antar SMS" : "tanpa jeda (instan)";
+        $msg = "Berhasil menjadwalkan {$result['total']} SMS ({$modeLabel}) dengan {$intervalLabel}. Total estimasi waktu: {$result['estimated_seconds']} detik.";
+
+        $this->auditLogModel->log(
+            actorType: 'ADMIN',
+            actorId: 'WEB_UI',
+            action: 'BULK_SMS_RESEND_QUEUED',
+            target: "TOTAL_{$result['total']}_SMS",
+            metadata: [
+                'mode'              => $mode,
+                'interval_seconds'  => $intervalSeconds,
+                'total_jobs'        => $result['total'],
+                'filter_recipient'  => $recipient,
+            ]
+        );
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => $msg,
+            'data'    => $result,
+        ]);
+    }
+
+    /**
      * Web UI: Manually Run Queue Maintenance Worker
      * POST /web/worker/run
      */
@@ -414,3 +481,4 @@ class DashboardController extends BaseController
         ]);
     }
 }
+

@@ -357,6 +357,112 @@ class SmsJobModel extends Model
     }
 
     /**
+     * Bulk Resend / Re-queue all SMS messages with custom staggered interval
+     * Useful for P2P Limit Testing & Batch Sending
+     *
+     * @param int $intervalSeconds Delay in seconds between each SMS (0 = instant, 5 = every 5s, etc.)
+     * @param string $mode 'clone_new' (creates new tracked jobs) or 'reset_existing' (resets status)
+     * @param string|null $filterRecipient Optional specific recipient filter
+     * @param int $limit Max number of messages to process (default 100)
+     * @return array Summary of the operation
+     */
+    public function bulkResendAll(int $intervalSeconds = 5, string $mode = 'clone_new', ?string $filterRecipient = null, int $limit = 100): array
+    {
+        $builder = $this->orderBy('id', 'DESC');
+        if (!empty($filterRecipient)) {
+            $cleaned = $this->cleanPhoneNumber($filterRecipient);
+            $builder->where('recipient', $cleaned);
+        }
+
+        // Get past jobs to resend
+        $sourceJobs = $builder->findAll($limit);
+
+        if (empty($sourceJobs)) {
+            return [
+                'total'            => 0,
+                'mode'             => $mode,
+                'interval_seconds' => $intervalSeconds,
+                'jobs'             => [],
+                'message'          => 'Tidak ada pesan SMS dalam riwayat antrean untuk dikirim ulang.',
+            ];
+        }
+
+        $nowUnix = time();
+        $processedJobs = [];
+
+        if ($mode === 'clone_new') {
+            // Mode 1: Clone into brand new tracked jobs (counted in total_jobs & statistics)
+            foreach ($sourceJobs as $index => $src) {
+                $scheduledUnix = $nowUnix + ($index * $intervalSeconds);
+                $scheduledAt = date('Y-m-d H:i:s', $scheduledUnix);
+                $jobId = 'SMS-' . date('YmdHis') . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6));
+                $clientMsgId = 'P2P-RESEND-' . date('YmdHis') . '-' . ($index + 1) . '-' . substr(bin2hex(random_bytes(2)), 0, 4);
+
+                $newJobData = [
+                    'job_id'            => $jobId,
+                    'client_message_id' => $clientMsgId,
+                    'recipient'         => $src['recipient'],
+                    'message'           => $src['message'],
+                    'status'            => self::STATUS_PENDING,
+                    'priority'          => $src['priority'] ?? 2,
+                    'attempt'           => 0,
+                    'max_attempt'       => $src['max_attempt'] ?? 3,
+                    'available_at'      => $scheduledAt,
+                ];
+
+                $id = $this->insert($newJobData);
+                $newJobData['id'] = $id;
+                $processedJobs[] = $newJobData;
+            }
+
+            // Immediately trigger dispatcher for the first job(s) ready NOW
+            if (!empty($processedJobs)) {
+                log_message('info', "[SmsJobModel::bulkResendAll] Cloned " . count($processedJobs) . " new SMS jobs with {$intervalSeconds}s interval.");
+                \App\Libraries\SmsDispatcher::dispatchJob($processedJobs[0]);
+            }
+        } else {
+            // Mode 2: Reset existing jobs status to PENDING with staggered available_at
+            foreach ($sourceJobs as $index => $src) {
+                $scheduledUnix = $nowUnix + ($index * $intervalSeconds);
+                $scheduledAt = date('Y-m-d H:i:s', $scheduledUnix);
+
+                $this->update($src['id'], [
+                    'status'             => self::STATUS_PENDING,
+                    'available_at'       => $scheduledAt,
+                    'assigned_device_id' => null,
+                    'claimed_at'         => null,
+                    'claim_expires_at'   => null,
+                    'attempt'            => 0,
+                    'failed_reason'      => null,
+                    'updated_at'         => date('Y-m-d H:i:s'),
+                ]);
+
+                $src['status'] = self::STATUS_PENDING;
+                $src['available_at'] = $scheduledAt;
+                $processedJobs[] = $src;
+            }
+
+            if (!empty($processedJobs)) {
+                log_message('info', "[SmsJobModel::bulkResendAll] Reset " . count($processedJobs) . " existing SMS jobs to PENDING with {$intervalSeconds}s interval.");
+                \App\Libraries\SmsDispatcher::dispatchJob($processedJobs[0]);
+            }
+        }
+
+        $totalCount = count($processedJobs);
+        $totalEstimatedSeconds = max(0, ($totalCount - 1) * $intervalSeconds);
+
+        return [
+            'total'             => $totalCount,
+            'mode'              => $mode,
+            'interval_seconds'  => $intervalSeconds,
+            'estimated_seconds' => $totalEstimatedSeconds,
+            'first_scheduled'   => date('Y-m-d H:i:s', $nowUnix),
+            'last_scheduled'    => date('Y-m-d H:i:s', $nowUnix + $totalEstimatedSeconds),
+            'jobs_count'        => $totalCount,
+        ];
+    }
+
+    /**
      * Clean phone number format
      */
     private function cleanPhoneNumber(string $phone): string

@@ -82,4 +82,48 @@ final class HomeDashboardTest extends CIUnitTestCase
             ->post('web/sms/delete');
         $delete->assertStatus(200);
     }
+
+    public function testBulkResendSmsWithInterval(): void
+    {
+        $jobModel = new SmsJobModel();
+        $jobModel->createJob([
+            'recipient' => '+628111111111',
+            'message'   => 'P2P Test 1',
+            'status'    => 'DELIVERED',
+        ]);
+        $jobModel->createJob([
+            'recipient' => '+628111111111',
+            'message'   => 'P2P Test 2',
+            'status'    => 'SENT',
+        ]);
+
+        // Test bulk resend with clone_new mode and 3-second interval
+        $res = $this->withBody(json_encode([
+            'interval'  => 3,
+            'mode'      => 'clone_new',
+            'recipient' => '+628111111111',
+            'limit'     => 10,
+        ]))->post('web/sms/bulk-resend');
+
+        $res->assertStatus(200);
+        $resJson = json_decode($res->getJSON(), true);
+        $this->assertEquals('success', $resJson['status']);
+        $this->assertEquals(2, $resJson['data']['total']);
+        $this->assertEquals(3, $resJson['data']['interval_seconds']);
+        $this->assertEquals('clone_new', $resJson['data']['mode']);
+        $this->assertEquals(3, $resJson['data']['estimated_seconds']);
+
+        // Test bulk resend with reset_existing mode
+        $resReset = $this->withBody(json_encode([
+            'interval' => 5,
+            'mode'     => 'reset_existing',
+            'limit'    => 5,
+        ]))->post('web/sms/bulk-resend');
+
+        $resReset->assertStatus(200);
+        $resetJson = json_decode($resReset->getJSON(), true);
+        $this->assertEquals('success', $resetJson['status']);
+        $this->assertGreaterThanOrEqual(1, $resetJson['data']['total']);
+        $this->assertEquals('reset_existing', $resetJson['data']['mode']);
+    }
 }
