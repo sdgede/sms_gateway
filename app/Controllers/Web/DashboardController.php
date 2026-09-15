@@ -435,7 +435,12 @@ class DashboardController extends BaseController
             $limit = 500;
         }
 
-        $result = $this->jobModel->bulkResendAll($intervalSeconds, $mode, $recipient, $limit, $scope);
+        $customMessage = trim((string)($raw['custom_message'] ?? $raw['message'] ?? $this->request->getVar('custom_message') ?? $this->request->getVar('message') ?? ''));
+        if (empty($customMessage)) {
+            $customMessage = null;
+        }
+
+        $result = $this->jobModel->bulkResendAll($intervalSeconds, $mode, $recipient, $limit, $scope, $customMessage);
 
         if ($result['total'] === 0) {
             return $this->response->setStatusCode(400)->setJSON([
@@ -446,7 +451,8 @@ class DashboardController extends BaseController
 
         $modeLabel = ($mode === 'clone_new') ? 'dibuat antrean baru (tetap terhitung di statistik)' : 'direset statusnya';
         $intervalLabel = $intervalSeconds > 0 ? "jeda {$intervalSeconds} detik" : "tanpa jeda";
-        $msg = "Berhasil menjadwalkan {$result['total']} SMS ({$modeLabel}) dengan {$intervalLabel}. Total estimasi: {$result['estimated_seconds']} detik.";
+        $broadcastLabel = !empty($customMessage) ? " [Broadcast Kustom: \"" . substr($customMessage, 0, 30) . "...\"]" : "";
+        $msg = "Berhasil menjadwalkan {$result['total']} SMS ({$modeLabel}){$broadcastLabel} dengan {$intervalLabel}. Total estimasi: {$result['estimated_seconds']} detik.";
 
         $this->auditLogModel->log(
             actorType: 'ADMIN',
@@ -458,6 +464,8 @@ class DashboardController extends BaseController
                 'interval_seconds'  => $intervalSeconds,
                 'total_jobs'        => $result['total'],
                 'filter_recipient'  => $recipient,
+                'scope'             => $scope,
+                'has_custom_msg'    => !empty($customMessage),
             ]
         );
 

@@ -1474,10 +1474,44 @@
             durStr = `${m} menit ${s > 0 ? s + ' detik' : ''}`;
         }
 
+        const customMsg = (document.getElementById('bulkCustomMessageInput')?.value || '').trim();
+
         const summaryEl = document.getElementById('bulkSummaryText');
         if (summaryEl) {
             const scopeLabel = scope === 'unique_recipients' ? 'nomor tujuan unik' : 'pesan antrean';
-            summaryEl.innerHTML = `Akan mengirim ulang ke <strong>${actualCount} ${scopeLabel}</strong> dengan jeda <strong>${interval} detik</strong> (${interval >= 60 ? (interval/60) + ' menit' : interval + 's'}) per SMS.<br><span style="color: #818cf8; font-size: 13px;">Estimasi total durasi: <strong>${durStr}</strong></span>`;
+            const msgInfo = customMsg ? `<span style="color: #34d399; font-weight: 600;">Broadcast Pesan Kustom (${customMsg.length} karakter)</span>` : `<span style="color: var(--text-dim);">Menggunakan pesan asli masing-masing riwayat</span>`;
+            summaryEl.innerHTML = `Akan mengirim ke <strong>${actualCount} ${scopeLabel}</strong> dengan jeda <strong>${interval} detik</strong> (${interval >= 60 ? (interval/60) + ' menit' : interval + 's'}) per SMS.<br>Isi Pesan: ${msgInfo}<br><span style="color: #818cf8; font-size: 13px;">Estimasi total durasi: <strong>${durStr}</strong></span>`;
+        }
+    }
+
+    function setBulkMessagePreset(type) {
+        const input = document.getElementById('bulkCustomMessageInput');
+        if (!input) return;
+        const nowStr = new Date().toLocaleTimeString('id-ID');
+        if (type === 'test') {
+            input.value = `[Uji P2P ${nowStr}] Testing kapasitas pengiriman SMS Gateway. Pesan ini dikirim secara otomatis.`;
+        } else if (type === 'notif') {
+            input.value = `Pemberitahuan: Sistem gateway sedang melakukan verifikasi jaringan berkala (${nowStr}).`;
+        } else if (type === 'clear') {
+            input.value = '';
+        }
+        updateBulkCharCount();
+        updateBulkSummary();
+    }
+
+    function updateBulkCharCount() {
+        const val = document.getElementById('bulkCustomMessageInput')?.value || '';
+        const len = val.length;
+        const countEl = document.getElementById('bulkCharCount');
+        const smsEl = document.getElementById('bulkSmsCount');
+        if (countEl) countEl.innerText = `${len} karakter`;
+        if (smsEl) {
+            if (len === 0) {
+                smsEl.innerText = 'Pesan Asli Riwayat';
+            } else {
+                const parts = len <= 160 ? 1 : Math.ceil(len / 153);
+                smsEl.innerText = `${parts} SMS`;
+            }
         }
     }
 
@@ -1494,6 +1528,7 @@
         const scope = document.querySelector('input[name="bulkScope"]:checked')?.value || 'unique_recipients';
         const recipient = document.getElementById('bulkRecipientSelect').value || '';
         const limit = parseInt(document.getElementById('bulkLimitInput').value || '100', 10);
+        const customMessage = (document.getElementById('bulkCustomMessageInput')?.value || '').trim();
 
         const btn = document.getElementById('btnSubmitBulk');
         if (btn) {
@@ -1510,7 +1545,8 @@
                     mode: mode,
                     scope: scope,
                     recipient: recipient,
-                    limit: limit
+                    limit: limit,
+                    custom_message: customMessage
                 })
             });
 
@@ -1546,29 +1582,29 @@
 
 <!-- Bulk Resend / P2P Limit Testing Modal -->
 <div id="bulkResendModal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(8px); z-index: 99999; align-items: center; justify-content: center; padding: 20px;" onclick="if(event.target === this) closeBulkResendModal()">
-    <div style="background: #121826; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; padding: 28px; max-width: 520px; width: 100%; box-shadow: 0 25px 60px rgba(0,0,0,0.8); position: relative; animation: slideIn 0.25s ease;">
+    <div style="background: #121826; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; padding: 28px; max-width: 520px; width: 100%; box-shadow: 0 25px 60px rgba(0,0,0,0.8); position: relative; animation: slideIn 0.25s ease; max-height: 90vh; overflow-y: auto;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
             <div style="display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: #fff;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                Kirim Ulang Semua SMS (Uji Limit P2P)
+                Kirim Ulang / Broadcast Semua SMS (Uji Limit P2P)
             </div>
             <button onclick="closeBulkResendModal()" style="background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 20px; padding: 4px;">&times;</button>
         </div>
 
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 18px; line-height: 1.5;">
-            Kirim ulang SMS ke semua nomor yang pernah dihubungi dengan <strong>jeda waktu 30 detik atau 1 menit per pesan</strong>. Setiap SMS akan otomatis dijadwalkan dan tetap terhitung dalam statistik.
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5;">
+            Kirim ulang atau broadcast pesan baru ke semua nomor dengan <strong>jeda waktu 30 detik atau 1 menit per SMS</strong> agar tidak melampaui limit FUP/P2P kartu operator.
         </p>
 
         <form id="bulkResendForm" onsubmit="handleBulkResendSubmit(event)">
             <!-- Target Scope Selection -->
-            <div class="form-group" style="margin-bottom: 14px;">
+            <div class="form-group" style="margin-bottom: 12px;">
                 <label style="font-weight: 600; color: var(--text-main); font-size: 12px; margin-bottom: 6px; display: block;">Target Penerima</label>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                     <label style="display: flex; align-items: flex-start; gap: 8px; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 10px; padding: 8px 10px; cursor: pointer;">
                         <input type="radio" name="bulkScope" value="unique_recipients" checked onchange="updateBulkSummary()" style="margin-top: 2px;">
                         <div>
                             <div style="font-size: 11px; font-weight: 600; color: #fff;">Semua Nomor Unik</div>
-                            <div style="font-size: 10px; color: var(--text-dim);">Pesan terakhir ke tiap nomor</div>
+                            <div style="font-size: 10px; color: var(--text-dim);">1 SMS per nomor kontak</div>
                         </div>
                     </label>
                     <label style="display: flex; align-items: flex-start; gap: 8px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 10px; cursor: pointer;">
@@ -1581,8 +1617,25 @@
                 </div>
             </div>
 
+            <!-- Custom Broadcast Message Textarea -->
+            <div class="form-group" style="margin-bottom: 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label style="margin: 0; font-weight: 600; font-size: 12px;">Teks Pesan Broadcast / Kustom (Opsional)</label>
+                    <div style="display: flex; gap: 4px;">
+                        <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px;" onclick="setBulkMessagePreset('test')">Template Uji</button>
+                        <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px;" onclick="setBulkMessagePreset('notif')">Template Info</button>
+                        <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px;" onclick="setBulkMessagePreset('clear')">Kosongkan</button>
+                    </div>
+                </div>
+                <textarea id="bulkCustomMessageInput" class="form-control" rows="3" placeholder="Tulis isi pesan broadcast baru di sini untuk mengganti pesan lama... (Biarkan KOSONG jika ingin memakai isi pesan asli masing-masing nomor)" oninput="updateBulkCharCount(); updateBulkSummary();" style="font-size: 12px; line-height: 1.4; resize: vertical;"></textarea>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 4px;">
+                    <span id="bulkCharCount">0 karakter</span>
+                    <span id="bulkSmsCount" style="color: #818cf8;">Pesan Asli Riwayat</span>
+                </div>
+            </div>
+
             <!-- Jeda / Interval Input -->
-            <div class="form-group" style="margin-bottom: 16px;">
+            <div class="form-group" style="margin-bottom: 14px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                     <label style="margin: 0; font-weight: 600; font-size: 12px;">Jeda Waktu Antar Pesan (Detik)</label>
                     <span style="font-size: 11px; color: #818cf8; font-weight: 600;">Standar P2P: 30s - 60s</span>
@@ -1599,7 +1652,7 @@
             </div>
 
             <!-- Mode Selection -->
-            <div class="form-group" style="margin-bottom: 14px;">
+            <div class="form-group" style="margin-bottom: 12px;">
                 <label style="font-weight: 600; color: var(--text-main); font-size: 12px; margin-bottom: 6px; display: block;">Mode Antrean</label>
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="display: flex; align-items: flex-start; gap: 8px; background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 8px; padding: 8px 10px; cursor: pointer;">
@@ -1632,7 +1685,7 @@
             </div>
 
             <!-- Summary Box -->
-            <div style="background: rgba(99, 102, 241, 0.1); border: 1px dashed rgba(99, 102, 241, 0.4); border-radius: 12px; padding: 12px 14px; margin-bottom: 18px; font-size: 12px; color: var(--text-main); line-height: 1.5;">
+            <div style="background: rgba(99, 102, 241, 0.1); border: 1px dashed rgba(99, 102, 241, 0.4); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; font-size: 12px; color: var(--text-main); line-height: 1.5;">
                 <div id="bulkSummaryText">
                     Memuat ringkasan estimasi...
                 </div>

@@ -406,13 +406,14 @@ class SmsJobModel extends Model
      * @param int $intervalSeconds Delay in seconds between each SMS (0 = instant, 5 = every 5s, etc.)
      * @param string $mode 'clone_new' (creates new tracked jobs) or 'reset_existing' (resets status)
     /**
-     * Bulk re-send all past SMS jobs with staggered interval (P2P / FUP limit testing)
+     * Bulk re-send / broadcast all past SMS jobs with staggered interval (P2P / FUP limit testing)
      * 
      * @param int $intervalSeconds Delay in seconds between each dispatched SMS (e.g. 30s or 60s)
      * @param string $mode 'clone_new' (creates new tracked jobs counted in stats) or 'reset_existing'
      * @param string|null $filterRecipient Optional specific recipient filter
      * @param int $limit Max number of messages to process (default 100)
      * @param string $scope 'all_jobs' or 'unique_recipients' (latest message per distinct recipient)
+     * @param string|null $customMessage Optional custom broadcast message text to overwrite original message
      * @return array Summary of the operation
      */
     public function bulkResendAll(
@@ -420,7 +421,8 @@ class SmsJobModel extends Model
         string $mode = 'clone_new',
         ?string $filterRecipient = null,
         int $limit = 100,
-        string $scope = 'all_jobs'
+        string $scope = 'all_jobs',
+        ?string $customMessage = null
     ): array {
         $builder = $this->orderBy('id', 'DESC');
         if (!empty($filterRecipient)) {
@@ -460,6 +462,8 @@ class SmsJobModel extends Model
         $nowUnix = time();
         $processedJobs = [];
         $activeDev = $this->resolveActiveDeviceId();
+        $hasCustomMsg = !empty(trim((string)$customMessage));
+        $cleanCustomMsg = $hasCustomMsg ? trim((string)$customMessage) : null;
 
         if ($mode === 'clone_new') {
             // Mode 1: Clone into brand new tracked jobs (counted in total_jobs & statistics)
@@ -469,12 +473,13 @@ class SmsJobModel extends Model
                 $jobId = 'SMS-' . date('YmdHis') . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6));
                 $clientMsgId = 'P2P-RESEND-' . date('YmdHis') . '-' . ($index + 1) . '-' . substr(bin2hex(random_bytes(2)), 0, 4);
                 $assignedDev = $src['assigned_device_id'] ?: $activeDev;
+                $msgBody = $cleanCustomMsg ?? $src['message'];
 
                 $newJobData = [
                     'job_id'             => $jobId,
                     'client_message_id'  => $clientMsgId,
                     'recipient'          => $src['recipient'],
-                    'message'            => $src['message'],
+                    'message'            => $msgBody,
                     'status'             => self::STATUS_PENDING,
                     'priority'           => $src['priority'] ?? 2,
                     'attempt'            => 0,
@@ -490,7 +495,7 @@ class SmsJobModel extends Model
 
             // Immediately trigger dispatcher for the first job ready NOW
             if (!empty($processedJobs)) {
-                log_message('info', "[SmsJobModel::bulkResendAll] Cloned " . count($processedJobs) . " new SMS jobs with {$intervalSeconds}s delay (Device: " . ($activeDev ?: 'Unassigned') . ").");
+                log_message('info', "[SmsJobModel::bulkResendAll] Cloned " . count($processedJobs) . " new SMS jobs with {$intervalSeconds}s delay (Device: " . ($activeDev ?: 'Unassigned') . ", CustomMsg: " . ($hasCustomMsg ? 'Yes' : 'No') . ").");
                 \App\Libraries\SmsDispatcher::dispatchJob($processedJobs[0]);
             }
         } else {
@@ -499,8 +504,9 @@ class SmsJobModel extends Model
                 $scheduledUnix = $nowUnix + ($index * $intervalSeconds);
                 $scheduledAt = date('Y-m-d H:i:s', $scheduledUnix);
                 $assignedDev = $src['assigned_device_id'] ?: $activeDev;
+                $msgBody = $cleanCustomMsg ?? $src['message'];
 
-                $this->update($src['id'], [
+                $updateData = [
                     'status'             => self::STATUS_PENDING,
                     'available_at'       => $scheduledAt,
                     'assigned_device_id' => $assignedDev,
@@ -509,11 +515,17 @@ class SmsJobModel extends Model
                     'attempt'            => 0,
                     'failed_reason'      => null,
                     'updated_at'         => date('Y-m-d H:i:s'),
-                ]);
+                ];
+                if ($hasCustomMsg) {
+                    $updateData['message'] = $msgBody;
+                }
+
+                $this->update($src['id'], $updateData);
 
                 $src['status'] = self::STATUS_PENDING;
                 $src['available_at'] = $scheduledAt;
                 $src['assigned_device_id'] = $assignedDev;
+                $src['message'] = $msgBody;
                 $processedJobs[] = $src;
             }
 

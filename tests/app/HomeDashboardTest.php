@@ -132,5 +132,24 @@ final class HomeDashboardTest extends CIUnitTestCase
         $this->assertGreaterThanOrEqual(1, $resetJson['data']['total']);
         $this->assertEquals('reset_existing', $resetJson['data']['mode']);
         $this->assertEquals(60, $resetJson['data']['interval_seconds']);
+
+        // Test bulk broadcast with custom message
+        $customText = 'Broadcast Test Info Promo 2026';
+        $resBroadcast = $this->withBody(json_encode([
+            'interval'       => 15,
+            'mode'           => 'clone_new',
+            'scope'          => 'unique_recipients',
+            'custom_message' => $customText,
+            'limit'          => 10,
+        ]))->post('web/sms/bulk-resend');
+
+        $resBroadcast->assertStatus(200);
+        $bcJson = json_decode($resBroadcast->getJSON(), true);
+        $this->assertEquals('success', $bcJson['status']);
+        $this->assertStringContainsString('Broadcast Kustom', $bcJson['message']);
+
+        // Verify that newly inserted jobs contain the custom broadcast text
+        $latestJob = $jobModel->orderBy('id', 'DESC')->first();
+        $this->assertEquals($customText, $latestJob['message']);
     }
 }
